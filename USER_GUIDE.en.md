@@ -8,6 +8,8 @@ This guide explains how to start DiagramWeave, draw flowcharts, save your work, 
 
 Double-click `start-diagramweave.bat` in the project root. Chinese Windows users can also use `启动DiagramWeave.bat`.
 
+Before first launch, install the official Node.js LTS: <https://nodejs.org/>. The official installer includes npm.
+
 On first launch, the script will:
 
 1. Check Node.js.
@@ -28,6 +30,8 @@ Then open:
 <http://127.0.0.1:4173/flowchart-editor.html>
 
 Do not open the HTML file directly with `file://`. Use the local HTTP service, otherwise connections, import/export, or asset loading may not work correctly.
+
+If Windows shows "Smart App Control blocked a potentially unsafe file", see [`WINDOWS_START.md`](WINDOWS_START.md) to unblock the downloaded files or start from the command line.
 
 ## 2. Interface
 
@@ -187,6 +191,14 @@ The content pack only updates icons, fonts, and connection mode configuration. M
 ### The page does not open
 
 Install Node.js 18+, then start the project with `pnpm serve` or the launcher BAT.
+
+### It says "pnpm / npm was not found"
+
+Install the official Node.js LTS: <https://nodejs.org/>. If Node.js is already installed but npm is still missing, reinstall the official Node.js LTS, close the BAT window, and run it again.
+
+### Windows blocks the BAT launcher
+
+If double-clicking the BAT file shows "Smart App Control blocked a potentially unsafe file", the file was likely marked by Windows as downloaded from the Internet. See [`WINDOWS_START.md`](WINDOWS_START.md).
 
 ### Port 4173 is already in use
 

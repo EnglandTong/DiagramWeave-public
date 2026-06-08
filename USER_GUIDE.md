@@ -8,6 +8,8 @@
 
 双击项目根目录中的 `start-diagramweave.bat`，或双击中文入口 `启动DiagramWeave.bat`。
 
+首次运行前请先安装官方 Node.js LTS：<https://nodejs.org/>。官方安装包会同时安装 npm。
+
 首次启动会自动完成：
 
 1. 检查 Node.js。
@@ -28,6 +30,8 @@ pnpm serve
 <http://127.0.0.1:4173/flowchart-editor.html>
 
 不要直接用 `file://` 打开 HTML 文件，否则连线、导入导出或资源加载可能异常。
+
+如果 Windows 提示“智能应用控制已阻止可能不安全的文件”，请参考 [`WINDOWS_START.md`](WINDOWS_START.md) 解除下载文件阻止，或改用命令行启动。
 
 ## 2. 基础界面
 
@@ -187,6 +191,14 @@ DiagramWeave 支持多页面和图层。
 ### 页面打不开
 
 确认已经安装 Node.js 18+，并通过 `pnpm serve` 或启动 BAT 打开页面。
+
+### 提示“未找到 pnpm / npm”
+
+请安装官方 Node.js LTS：<https://nodejs.org/>。如果已经安装 Node.js 但仍然提示缺少 npm，建议重新安装官方 Node.js LTS，并关闭后重新打开 BAT 窗口。
+
+### Windows 阻止 BAT 启动
+
+如果双击 BAT 时出现“智能应用控制已阻止可能不安全的文件”，通常是因为文件来自 GitHub 下载包，被 Windows 标记为来自 Internet。处理方式见 [`WINDOWS_START.md`](WINDOWS_START.md)。
 
 ### 端口 4173 被占用
 

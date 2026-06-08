@@ -1,6 +1,10 @@
 /**
- * 首次 / 启动前环境同步：依赖、vendor、字体
- * 由 start-diagramweave.bat 调用；也可手动 node scripts/setup.mjs
+ * Startup environment sync for start-diagramweave.bat.
+ *
+ * A GitHub source ZIP can include the checked-in vendor runtime files but not
+ * node_modules. In that case the app can still start because scripts/serve.mjs
+ * only needs Node built-ins. Package manager installation is required only when
+ * the runtime files are missing.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -10,6 +14,13 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const isWin = process.platform === 'win32';
 
+const vendorFiles = [
+  'vendor/jspdf.umd.min.js',
+  'vendor/svg2pdf.umd.min.js',
+  'vendor/dagre.min.js',
+  'vendor/xlsx.full.min.js',
+];
+
 function commandName(cmd) {
   return isWin && !cmd.endsWith('.cmd') && ['pnpm', 'npm', 'npx', 'corepack'].includes(cmd)
     ? `${cmd}.cmd`
@@ -18,31 +29,35 @@ function commandName(cmd) {
 
 function run(label, cmd, args) {
   console.log(`> ${label}`);
-  const r = spawnSync(commandName(cmd), args, {
+  const result = spawnSync(commandName(cmd), args, {
     cwd: root,
     stdio: 'inherit',
     shell: false,
   });
-  if (r.status !== 0) {
+  if (result.status !== 0) {
     console.error(`Setup failed: ${cmd} ${args.join(' ')}`);
-    process.exit(r.status || 1);
+    process.exit(result.status || 1);
   }
 }
 
 function commandOk(cmd, args = ['--version']) {
-  const r = spawnSync(commandName(cmd), args, { cwd: root, stdio: 'ignore', shell: false });
-  return r.status === 0;
+  const result = spawnSync(commandName(cmd), args, { cwd: root, stdio: 'ignore', shell: false });
+  return result.status === 0;
 }
 
 function depsReady() {
   return existsSync(join(root, 'node_modules', 'jspdf', 'package.json'));
 }
 
+function vendorReady() {
+  return vendorFiles.every((file) => existsSync(join(root, file)));
+}
+
 function resolveInstallCommand() {
   if (commandOk('pnpm')) return { cmd: 'pnpm', args: ['install'] };
   if (commandOk('corepack', ['pnpm', '--version'])) {
-    run('启用 Corepack pnpm', 'corepack', ['enable']);
-    run('准备 pnpm', 'corepack', ['prepare', 'pnpm@11.5.2', '--activate']);
+    run('Enable Corepack pnpm', 'corepack', ['enable']);
+    run('Prepare pnpm', 'corepack', ['prepare', 'pnpm@11.5.2', '--activate']);
     if (commandOk('pnpm')) return { cmd: 'pnpm', args: ['install'] };
     return { cmd: 'corepack', args: ['pnpm', 'install'] };
   }
@@ -50,16 +65,30 @@ function resolveInstallCommand() {
   return null;
 }
 
-if (!depsReady()) {
+const hasDeps = depsReady();
+const hasVendor = vendorReady();
+
+if (!hasDeps && !hasVendor) {
   const install = resolveInstallCommand();
   if (!install) {
-    console.error('未找到 pnpm / npm，无法安装依赖。请先安装 Node.js：https://nodejs.org/');
+    console.error('[ERROR] Runtime files are missing, and pnpm/npm was not found.');
+    console.error('Install the official Node.js LTS from https://nodejs.org/ and run this BAT again.');
+    console.error('The official Node.js LTS installer includes npm. If node exists but npm is missing, reinstall Node.js LTS and reopen this window.');
+    console.error('If this is a release ZIP, download the full release package instead of the source ZIP.');
     process.exit(1);
   }
-  run('安装依赖', install.cmd, install.args);
+  run('Install dependencies', install.cmd, install.args);
 }
 
-run('复制 vendor 运行时', 'node', [join(root, 'scripts/copy-vendor.mjs')]);
-run('同步中文字体', 'node', [join(root, 'scripts/download-font.mjs')]);
+if (depsReady()) {
+  run('Copy vendor runtime files', 'node', [join(root, 'scripts/copy-vendor.mjs')]);
+} else if (vendorReady()) {
+  console.log('Vendor runtime files already present. Skipping dependency install.');
+} else {
+  console.error('[ERROR] Vendor runtime files are still missing after setup.');
+  process.exit(1);
+}
 
-console.log('DiagramWeave 环境就绪');
+run('Sync Chinese font', 'node', [join(root, 'scripts/download-font.mjs')]);
+
+console.log('DiagramWeave environment is ready.');
