@@ -1,0 +1,16 @@
+{
+  "name": "竖向基础流程",
+  "description": "开始 → 处理 → 判断 → 结束，可作为模板二次修改",
+  "layout": "vertical",
+  "nodes": [
+    { "shape": "start", "label": "开始" },
+    { "shape": "rectangle", "label": "处理步骤" },
+    { "shape": "diamond", "label": "是否通过？" },
+    { "shape": "end", "label": "结束" }
+  ],
+  "connections": [
+    { "fromIndex": 0, "toIndex": 1 },
+    { "fromIndex": 1, "toIndex": 2 },
+    { "fromIndex": 2, "toIndex": 3, "label": "是" }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "version": "1.2.0",
+  "appName": "DiagramWeave",
+  "allowRemoteFallback": false,
+  "githubRepo": "EnglandTong/DiagramWeave-public",
+  "releasePageUrl": "https://github.com/EnglandTong/DiagramWeave-public/releases",
+  "updateCheckUrl": "",
+  "contentPackUrl": "",
+  "contentPackVersion": "1.0.0",
+  "assets": [
+    {
+      "id": "xlsx",
+      "path": "vendor/xlsx.full.min.js",
+      "remote": "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js",
+      "globalCheck": "XLSX"
+    },
+    {
+      "id": "dagre",
+      "path": "vendor/dagre.min.js",
+      "remote": "https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js",
+      "globalCheck": "dagre"
+    },
+    {
+      "id": "jspdf",
+      "path": "vendor/jspdf.umd.min.js",
+      "remote": "https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js",
+      "globalCheck": "jspdf"
+    },
+    {
+      "id": "svg2pdf",
+      "path": "vendor/svg2pdf.umd.min.js",
+      "remote": "https://cdn.jsdelivr.net/npm/svg2pdf.js@2.7.0/dist/svg2pdf.umd.min.js",
+      "globalCheck": "svg2pdf",
+      "dependsOn": ["jspdf"]
+    },
+    {
+      "id": "font",
+      "path": "vendor/fonts/NotoSansSC-Regular.otf",
+      "remote": "",
+      "optional": true
+    }
+  ],
+  "localTemplatesIndex": "templates/index.json",
+  "remoteTemplates": []
+}

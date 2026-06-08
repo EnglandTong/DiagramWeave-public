@@ -1,0 +1,31 @@
+{
+  "name": "diagramweave",
+  "version": "1.0.0",
+  "description": "DiagramWeave - 单机 Web 流程图编辑器",
+  "main": "index.js",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "vendor:copy": "node scripts/copy-vendor.mjs",
+    "font:download": "node scripts/download-font.mjs",
+    "postinstall": "node scripts/copy-vendor.mjs && node scripts/download-font.mjs",
+    "setup": "node scripts/setup.mjs",
+    "test": "node node_modules/vitest/vitest.mjs run",
+    "test:e2e": "node node_modules/@playwright/test/cli.js test",
+    "typecheck": "node scripts/check-syntax.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@11.5.2",
+  "type": "module",
+  "dependencies": {
+    "dagre": "^0.8.5",
+    "jspdf": "^4.2.1",
+    "svg2pdf.js": "^2.7.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "vitest": "^3.2.4"
+  }
+}

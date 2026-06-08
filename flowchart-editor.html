@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DiagramWeave - 流程图编辑器</title>
+<link rel="stylesheet" href="flowchart-editor.css">
+</head>
+<body>
+
+<!-- 顶部工具栏 -->
+<div class="toolbar">
+  <div class="toolbar-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0-4h18"/>
+    </svg>
+    DiagramWeave
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" id="btn-select" onclick="setTool('select')" data-i18n-title="toolbar.select">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" id="btn-connect" onclick="setTool('connect')" data-i18n-title="toolbar.connect">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" id="btn-pan" onclick="setTool('pan')" data-i18n-title="toolbar.pan">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 11V6a2 2 0 014 0v5"/><path d="M12 10V5a2 2 0 014 0v7"/><path d="M16 12V8a2 2 0 014 0v6c0 4-3 7-7 7h-1c-3 0-5-2-6-5l-2-5a2 2 0 013.7-1.5L13 12"/></svg>
+  </button>
+
+  <div class="toolbar-divider toolbar-hide-in-present"></div>
+
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="undo()" data-i18n-title="toolbar.undo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="redo()" data-i18n-title="toolbar.redo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10"/></svg>
+  </button>
+
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="toggleTextEditor()" data-i18n-title="toolbar.table" id="btn-text-editor">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+  </button>
+
+  <div class="toolbar-divider toolbar-hide-in-present"></div>
+
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="showLayoutDialog()" data-i18n-title="toolbar.layout">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  </button>
+  <select class="toolbar-route-select toolbar-hide-in-present" id="connRouteMode" data-i18n-title="toolbar.connRoute" onchange="setConnRouteMode(this.value)">
+    <option value="bezier" data-i18n="conn.bezier">曲线</option>
+    <option value="orthogonal" data-i18n="conn.orthogonal">折线</option>
+    <option value="avoidance" data-i18n="conn.avoidance">避障</option>
+  </select>
+
+  <div class="toolbar-divider toolbar-hide-in-present"></div>
+
+  <button class="toolbar-btn icon-only danger toolbar-hide-in-present" onclick="deleteSelected()" data-i18n-title="toolbar.delete">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only danger toolbar-hide-in-present" onclick="clearCanvas()" data-i18n-title="toolbar.clear">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+  </button>
+
+  <div class="toolbar-spacer toolbar-hide-in-present"></div>
+
+  <div class="toolbar-zoom toolbar-hide-in-present">
+    <button onclick="zoomOut()" data-i18n-title="toolbar.zoomOut">−</button>
+    <span id="zoom-level">100%</span>
+    <button onclick="zoomIn()" data-i18n-title="toolbar.zoomIn">+</button>
+    <button class="toolbar-btn icon-only" onclick="zoomReset()" data-i18n-title="toolbar.zoomReset" style="width:24px;height:24px;border:1px solid var(--border);background:var(--bg-tertiary);">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M3 12a9 9 0 109-9"/><polyline points="3 3 3 12 12 12"/></svg>
+    </button>
+  </div>
+
+  <div class="toolbar-divider toolbar-hide-in-present"></div>
+
+  <button class="toolbar-btn icon-only present-btn toolbar-hide-in-present" onclick="enterPresentation()" data-i18n-title="toolbar.present">
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6,3 20,12 6,21"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="showExportDialog()" data-i18n-title="toolbar.export">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="exportJSON()" data-i18n-title="toolbar.save">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="importJSON()" data-i18n-title="toolbar.load">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="showExcelDataDialog()" data-i18n-title="toolbar.excel">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+  </button>
+  <select class="toolbar-route-select toolbar-hide-in-present" id="appLanguage" data-i18n-title="toolbar.lang" onchange="setAppLanguage(this.value)" aria-label="Language">
+    <option value="zh-CN">中文</option>
+    <option value="en">EN</option>
+  </select>
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="showSettingsDialog()" data-i18n-title="toolbar.settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
+
+  <!-- 演示模式工具栏控制 -->
+  <div class="toolbar-present-controls" id="presentToolbarControls">
+    <div class="toolbar-brand" style="margin-right:8px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0-4h18"/>
+      </svg>
+      DiagramWeave
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="present-step-info" id="presentStepInfo">步骤 <span>0/0</span></div>
+    <div class="toolbar-divider"></div>
+    <button class="present-toolbar-btn" onclick="presentPrev()" title="上一步">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
+      上一步
+    </button>
+    <button class="present-toolbar-btn" onclick="presentNext()" title="下一步">
+      下一步
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <div class="toolbar-divider"></div>
+    <button class="present-toolbar-btn exit-present" onclick="exitPresentation()" title="退出演示 (Esc)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      退出演示
+    </button>
+  </div>
+</div>
+
+<div class="page-tabs-bar" id="pageTabs"></div>
+
+<!-- 主布局 -->
+<div class="main-layout">
+
+  <!-- 左侧形状面板 -->
+  <div class="sidebar">
+    <!-- 模板按钮 -->
+    <button class="template-btn" onclick="showTemplateDialog()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span data-i18n="sidebar.templates">流程模板</span>
+    </button>
+
+    <div class="sidebar-header" data-i18n="sidebar.shapes">图形</div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title" data-i18n="sidebar.basic">基本图形</div>
+      <div class="shape-grid">
+        <div class="shape-item" draggable="true" data-shape="rectangle" data-label="流程">
+          <svg viewBox="0 0 40 40"><rect x="4" y="8" width="32" height="24" rx="3" fill="none" stroke="#6c8cff" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">流程</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="rounded" data-label="子流程">
+          <svg viewBox="0 0 40 40"><rect x="4" y="8" width="32" height="24" rx="12" fill="none" stroke="#4ecdc4" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">子流程</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="diamond" data-label="判断">
+          <svg viewBox="0 0 40 40"><polygon points="20,4 38,20 20,36 2,20" fill="none" stroke="#ffd93d" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">判断</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="terminator" data-label="开始/结束">
+          <svg viewBox="0 0 40 40"><rect x="4" y="10" width="32" height="20" rx="10" fill="none" stroke="#ff6b6b" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">开始/结束</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="circle" data-label="连接点">
+          <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14" fill="none" stroke="#c084fc" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">连接点</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="database" data-label="数据">
+          <svg viewBox="0 0 40 40"><ellipse cx="20" cy="12" rx="14" ry="6" fill="none" stroke="#f97316" stroke-width="1.5"/><path d="M6 12v16c0 3.3 6.3 6 14 6s14-2.7 14-6V12" fill="none" stroke="#f97316" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">数据</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="parallelogram" data-label="输入/输出">
+          <svg viewBox="0 0 40 40"><polygon points="10,8 38,8 30,32 2,32" fill="none" stroke="#34d399" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">输入/输出</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="document" data-label="文档">
+          <svg viewBox="0 0 40 40"><path d="M6 6h28v24c0 0-7 4-14 4S6 30 6 30V6z" fill="none" stroke="#60a5fa" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">文档</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="hexagon" data-label="准备">
+          <svg viewBox="0 0 40 40"><polygon points="20,4 36,12 36,28 20,36 4,28 4,12" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">准备</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="triangle" data-label="合并">
+          <svg viewBox="0 0 40 40"><polygon points="20,4 36,32 4,32" fill="none" stroke="#f472b6" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">合并</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="delay" data-label="延迟">
+          <svg viewBox="0 0 40 40"><path d="M6 8h24c0 0 4 8 4 12s-4 12-4 12H6V8z" fill="none" stroke="#fb923c" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">延迟</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="display" data-label="显示">
+          <svg viewBox="0 0 40 40"><path d="M6 8h28v20H6z" fill="none" stroke="#22d3ee" stroke-width="1.5"/><path d="M14 28l6 6 6-6" fill="none" stroke="#22d3ee" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">显示</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="manual" data-label="手动操作">
+          <svg viewBox="0 0 40 40"><path d="M8 8l24 4v20l-24 4V8z" fill="none" stroke="#84cc16" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">手动操作</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="sort" data-label="排序">
+          <svg viewBox="0 0 40 40"><polygon points="20,4 36,16 28,16 28,32 12,32 12,16 4,16" fill="none" stroke="#e879f9" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">排序</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="or" data-label="或">
+          <svg viewBox="0 0 40 40"><path d="M20 4c8 8 16 12 16 16s-8 8-16 16c-8-8-16-12-16-16s8-8 16-16z" fill="none" stroke="#facc15" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">或</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="storage" data-label="存储">
+          <svg viewBox="0 0 40 40"><polygon points="20,4 36,14 36,34 4,34 4,14" fill="none" stroke="#fb7185" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">存储</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="multidoc" data-label="多文档">
+          <svg viewBox="0 0 40 40"><path d="M6 10h28v18c0 0-7 4-14 4S6 28 6 28V10z" fill="none" stroke="#60a5fa" stroke-width="1.5"/><path d="M8 6h28v18c0 0-7 4-14 4S8 24 8 24V6z" fill="none" stroke="#93c5fd" stroke-width="1" opacity="0.5"/></svg>
+          <span class="shape-item-label">多文档</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="internalstorage" data-label="内部存储">
+          <svg viewBox="0 0 40 40"><rect x="4" y="8" width="32" height="24" rx="3" fill="none" stroke="#a78bfa" stroke-width="1.5"/><line x1="14" y1="8" x2="14" y2="32" stroke="#a78bfa" stroke-width="1"/><line x1="26" y1="8" x2="26" y2="32" stroke="#a78bfa" stroke-width="1"/></svg>
+          <span class="shape-item-label">内部存储</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="offlinestorage" data-label="离线存储">
+          <svg viewBox="0 0 40 40"><ellipse cx="20" cy="14" rx="14" ry="8" fill="none" stroke="#f97316" stroke-width="1.5"/><path d="M6 14v12c0 4.4 6.3 8 14 8s14-3.6 14-8V14" fill="none" stroke="#f97316" stroke-width="1.5"/><line x1="6" y1="20" x2="6" y2="20" stroke="#f97316" stroke-width="1.5"/></svg>
+          <span class="shape-item-label">离线存储</span>
+        </div>
+        <div class="shape-item" draggable="true" data-shape="annotation" data-label="注释">
+          <svg viewBox="0 0 40 40"><rect x="4" y="8" width="32" height="24" rx="3" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3"/></svg>
+          <span class="shape-item-label">注释</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title" data-i18n="sidebar.extended">扩展图形</div>
+      <div class="shape-grid">
+        <div class="shape-item" draggable="true" data-shape="cloud" data-label="云服务"><svg viewBox="0 0 40 40"><path d="M12 26h18a6 6 0 000-12 8 8 0 00-15-2 6 6 0 00-3 14z" fill="none" stroke="#38bdf8" stroke-width="1.5"/></svg><span class="shape-item-label">云服务</span></div>
+        <div class="shape-item" draggable="true" data-shape="actor" data-label="角色"><svg viewBox="0 0 40 40"><circle cx="20" cy="12" r="6" fill="none" stroke="#a78bfa" stroke-width="1.5"/><path d="M8 34c0-7 5-12 12-12s12 5 12 12" fill="none" stroke="#a78bfa" stroke-width="1.5"/></svg><span class="shape-item-label">角色</span></div>
+        <div class="shape-item" draggable="true" data-shape="note" data-label="便签"><svg viewBox="0 0 40 40"><path d="M8 8h24v20l-6 4-6-4H8z" fill="none" stroke="#ffd93d" stroke-width="1.5"/></svg><span class="shape-item-label">便签</span></div>
+        <div class="shape-item" draggable="true" data-shape="offpage" data-label="跨页"><svg viewBox="0 0 40 40"><polygon points="6,8 30,8 34,20 30,32 6,32" fill="none" stroke="#94a3b8" stroke-width="1.5"/></svg><span class="shape-item-label">跨页</span></div>
+        <div class="shape-item" draggable="true" data-shape="subprocess" data-label="子流程框"><svg viewBox="0 0 40 40"><rect x="6" y="10" width="28" height="20" rx="3" fill="none" stroke="#4ecdc4" stroke-width="1.5"/><rect x="10" y="14" width="20" height="12" rx="2" fill="none" stroke="#4ecdc4" stroke-width="1"/></svg><span class="shape-item-label">子流程框</span></div>
+        <div class="shape-item" draggable="true" data-shape="cross" data-label="交叉"><svg viewBox="0 0 40 40"><line x1="20" y1="6" x2="20" y2="34" stroke="#f87171" stroke-width="2"/><line x1="6" y1="20" x2="34" y2="20" stroke="#f87171" stroke-width="2"/></svg><span class="shape-item-label">交叉</span></div>
+        <div class="shape-item" draggable="true" data-shape="start" data-label="开始"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="12" fill="none" stroke="#4ecdc4" stroke-width="2"/></svg><span class="shape-item-label">开始</span></div>
+        <div class="shape-item" draggable="true" data-shape="end" data-label="结束"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="12" fill="none" stroke="#ff6b6b" stroke-width="2.5"/></svg><span class="shape-item-label">结束</span></div>
+        <div class="shape-item" draggable="true" data-shape="card" data-label="卡片"><svg viewBox="0 0 40 40"><rect x="8" y="8" width="24" height="24" rx="2" fill="none" stroke="#84cc16" stroke-width="1.5"/></svg><span class="shape-item-label">卡片</span></div>
+        <div class="shape-item" draggable="true" data-shape="summing" data-label="求和"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="12" fill="none" stroke="#facc15" stroke-width="1.5"/><line x1="10" y1="20" x2="30" y2="20" stroke="#facc15" stroke-width="1.5"/></svg><span class="shape-item-label">求和</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" id="remoteShapesSection" style="display:none;">
+      <div class="sidebar-section-title" data-i18n="sidebar.remoteIcons">远程图标</div>
+      <div class="shape-grid" id="remoteShapesGrid"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title" data-i18n="sidebar.layers">图层</div>
+      <div class="layer-list" id="layerList"></div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:auto; padding-top:10px; border-top:1px solid var(--border);">
+      <div style="padding:6px; font-size:11px; color:var(--text-muted); line-height:1.5;">
+        <div><kbd style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-family:var(--font-mono);font-size:10px;">T</kbd> 文本编辑</div>
+        <div><kbd style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-family:var(--font-mono);font-size:10px;">双击</kbd> 编辑文字</div>
+        <div><kbd style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-family:var(--font-mono);font-size:10px;">Delete</kbd> 删除选中</div>
+        <div><kbd style="background:var(--bg-tertiary);border:1px solid var(--border);border-radius:3px;padding:0 4px;font-family:var(--font-mono);font-size:10px;">Ctrl+Z</kbd> 撤销</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 演示模式：左侧放大预览（不占画布，不挡连线） -->
+  <aside class="present-zoom-dock" id="presentZoomDock">
+    <div class="present-zoom-dock-header">
+      <div class="present-zoom-lens-label" id="presentZoomLabel">当前步骤</div>
+    </div>
+    <div class="present-zoom-dock-body">
+      <div class="present-zoom-lens-card">
+        <div class="present-zoom-dock-inner" id="presentZoomLensInner">
+          <div class="present-zoom-placeholder" id="presentZoomPlaceholder">按 → 开始演示<br>此处显示放大图形</div>
+          <div class="present-zoom-preview" id="presentZoomPreview"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 画布区域 -->
+  <div class="canvas-wrapper" id="canvasWrapper">
+    <div class="canvas-grid-bg"></div>
+    <div class="canvas" id="canvas">
+      <div class="canvas-transform" id="canvasTransform">
+        <svg class="connections-layer" id="connectionsLayer"></svg>
+      </div>
+    </div>
+    <div class="selection-box" id="selectionBox"></div>
+    <div class="shortcuts-hint">
+      <span><kbd>V</kbd> 选择</span>
+      <span><kbd>L</kbd> 连线</span>
+      <span>点击连线编辑</span>
+      <span><kbd>滚轮</kbd> 缩放</span>
+      <span>按住空格拖拽画布</span>
+    </div>
+
+    <!-- 演示模式浮动控制条 -->
+    <div class="present-floating-bar" id="presentFloatingBar">
+      <button class="present-float-btn" onclick="presentFirst()" title="第一步">&#9198;</button>
+      <button class="present-float-btn" onclick="presentPrev()" title="上一步">&#9664;</button>
+      <div class="present-float-divider"></div>
+      <div class="present-float-indicator" id="presentFloatIndicator">
+        <span class="step-num">0/0</span> · 当前：无
+      </div>
+      <div class="present-float-divider"></div>
+      <button class="present-float-btn" onclick="presentNext()" title="下一步">&#9654;</button>
+      <button class="present-float-btn" onclick="presentLast()" title="最后一步">&#9197;</button>
+      <div class="present-float-divider"></div>
+      <button class="present-float-btn exit-btn" onclick="exitPresentation()" title="退出演示 (Esc)">&#10005;</button>
+    </div>
+
+    <!-- 分支选择弹窗 -->
+    <div class="branch-overlay" id="branchOverlay" onclick="if(event.target===this){document.getElementById('branchOverlay').classList.remove('visible');}">
+      <div class="branch-card" style="position:relative;">
+        <button class="dialog-close-btn" onclick="document.getElementById('branchOverlay').classList.remove('visible');" title="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div class="branch-card-title">选择路径</div>
+        <div id="branchOptions"></div>
+      </div>
+    </div>
+
+    <!-- 演示模式内容说明（旧浮动面板，保留 id 供脚本引用） -->
+    <div class="present-content-panel" id="presentContentPanel" aria-hidden="true">
+      <div class="panel-step-num" id="panelStepNum"></div>
+      <div class="panel-title" id="panelTitle"></div>
+      <div class="panel-type" id="panelType"></div>
+      <div class="panel-desc" id="panelDesc"></div>
+      <div class="panel-branch-info" id="panelBranchInfo" style="display:none;">
+        分支条件：<span class="branch-label" id="panelBranchLabel"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 演示模式右侧详情栏 -->
+  <aside class="present-sidebar" id="presentSidebar">
+    <div class="present-sidebar-header">
+      <div class="panel-step-num" id="sidebarStepNum">步骤 —</div>
+      <div class="panel-title" id="sidebarTitle">按 → 开始演示</div>
+    </div>
+    <div class="present-sidebar-body" id="presentSidebarBody">
+      <div class="present-detail-row">
+        <span class="present-detail-label">图形</span>
+        <span class="present-detail-type" id="sidebarType">—</span>
+      </div>
+      <div class="present-detail-row">
+        <span class="present-detail-label">编号</span>
+        <span class="present-detail-value" id="sidebarRefId">—</span>
+      </div>
+      <div class="present-detail-row">
+        <span class="present-detail-label">角色</span>
+        <span class="present-detail-value" id="sidebarRole">—</span>
+      </div>
+      <div class="present-detail-row">
+        <span class="present-detail-label">耗时</span>
+        <span class="present-detail-value" id="sidebarDuration">—</span>
+      </div>
+      <div class="present-detail-row">
+        <span class="present-detail-label">详细说明</span>
+        <div class="present-detail-value muted" id="sidebarDesc">进入演示后，此处显示当前步骤的完整说明。</div>
+      </div>
+      <div class="present-path-block in-path" id="sidebarPathIn">
+        <div class="present-path-block-title">来路（已点亮）</div>
+        <ul class="present-path-list" id="sidebarPathInList"><li>—</li></ul>
+      </div>
+      <div class="present-path-block out-path" id="sidebarPathOut">
+        <div class="present-path-block-title">去路（已点亮）</div>
+        <ul class="present-path-list" id="sidebarPathOutList"><li>—</li></ul>
+      </div>
+      <div class="present-detail-row" id="sidebarBranchRow" style="display:none;">
+        <span class="present-detail-label">分支选项</span>
+        <span class="present-detail-value" id="sidebarBranch">—</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 右侧属性面板 -->
+  <div class="properties-panel" id="propertiesPanel">
+    <div class="properties-header" data-i18n="props.title">属性</div>
+    <div class="properties-empty" id="propsEmpty" style="display:none;">
+      <p data-i18n-html="props.empty">选中形状或连线<br>查看和编辑属性</p>
+    </div>
+    <div id="propsPageContent">
+      <div class="prop-group">
+        <div class="prop-group-title" data-i18n="props.pageInfo">页面信息</div>
+        <div class="prop-row">
+          <span class="prop-label" data-i18n="prop.pageName">页面名称</span>
+          <input class="prop-input" id="propPageName" data-i18n-placeholder="prop.pageNamePh" placeholder="页面名称" onchange="updatePropPageName(this.value)">
+        </div>
+        <p class="prop-page-hint" data-i18n="prop.pageHint">保存 JSON / 导出图片时，默认使用当前页面名称作为文件名。</p>
+        <div class="prop-row">
+          <span class="prop-label" data-i18n="prop.scale">规模</span>
+          <span class="prop-readonly" id="propPageScale">—</span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label" data-i18n="prop.totalDuration">总耗时</span>
+          <span class="prop-readonly prop-stat-highlight" id="propPageTotalDuration">—</span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label" data-i18n="prop.criticalPath">关键路径</span>
+          <span class="prop-readonly" id="propPageCriticalPath">—</span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label" data-i18n="prop.stepCount">步骤数</span>
+          <span class="prop-readonly prop-stat-highlight" id="propPageStepCount">—</span>
+        </div>
+        <div id="propDeletePageRow" style="display:none; margin-top: 8px;">
+          <button type="button" class="prop-page-delete-btn" onclick="deleteCurrentPage()" data-i18n="prop.deletePage">删除当前页</button>
+        </div>
+      </div>
+    </div>
+    <div id="propsContent" style="display:none;">
+      <div class="prop-group">
+        <div class="prop-group-title">流程内容</div>
+        <div class="prop-row">
+          <span class="prop-label">编号</span>
+          <span class="prop-readonly" id="propRefId">—</span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">下一连线</span>
+          <span class="prop-readonly" id="propNextConn">—</span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">简介</span>
+          <input class="prop-input" id="propLabel" placeholder="图形上显示的一行标题" onchange="updatePropLabel(this.value)">
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">角色</span>
+          <input class="prop-input" id="propRole" placeholder="如：申请人、审批人" onchange="updatePropRole(this.value)">
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">图形</span>
+          <select class="prop-input" id="propTypeSelect" onchange="updatePropType(this.value)"></select>
+        </div>
+        <div class="prop-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <span class="prop-label">详细说明</span>
+          <textarea class="prop-input" id="propDetail" rows="4" placeholder="该步骤的详细内容介绍..." onchange="updatePropDetail(this.value)" style="resize:vertical;font-family:inherit;"></textarea>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">耗时（天）</span>
+          <input class="prop-input" id="propDuration" type="number" min="0" step="0.5" placeholder="0" onchange="updatePropDuration(this.value)" style="width:80px;">
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">图层</span>
+          <select class="prop-input" id="propLayer" onchange="updatePropLayer(parseInt(this.value,10))"></select>
+        </div>
+        <div class="prop-row" id="propOffpageRow" style="display:none;flex-wrap:wrap;">
+          <span class="prop-label">目标页</span>
+          <select class="prop-input" id="propTargetPage" onchange="updatePropTargetPage(this.value)" style="flex:1;min-width:120px;"></select>
+          <button type="button" class="toolbar-btn" style="margin-top:4px;font-size:12px;" onclick="navigateOffpageTarget()">打开目标页</button>
+        </div>
+      </div>
+      <div class="prop-group">
+        <div class="prop-group-title">样式</div>
+        <div class="prop-row" style="flex-direction:column;align-items:stretch;gap:4px;">
+          <span class="prop-label">填充色</span>
+          <div class="color-swatch-grid" id="propFillSwatches"></div>
+        </div>
+        <div class="prop-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:8px;">
+          <span class="prop-label">边框色</span>
+          <div class="color-swatch-grid" id="propStrokeSwatches"></div>
+        </div>
+      </div>
+      <div class="prop-group" id="propTimeSummary" style="display:none;">
+        <div class="prop-group-title">流程耗时统计</div>
+        <div class="prop-row">
+          <span class="prop-label">总耗时</span>
+          <span id="propTotalDuration" style="color:var(--accent);font-weight:600;">0 天</span>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">节点数</span>
+          <span id="propNodeCount">0</span>
+        </div>
+      </div>
+    </div>
+    <div id="propsConnContent" style="display:none;">
+      <div class="prop-group">
+        <div class="prop-group-title">连线</div>
+        <div class="prop-row">
+          <span class="prop-label">起点</span>
+          <select class="prop-input" id="propConnFrom" onchange="updatePropConnFrom(this.value)" style="flex:1;min-width:0;"></select>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">终点</span>
+          <select class="prop-input" id="propConnTo" onchange="updatePropConnTo(this.value)" style="flex:1;min-width:0;"></select>
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">条件</span>
+          <input class="prop-input" id="propConnLabel" placeholder="如：是、否" onchange="updatePropConnLabel(this.value)">
+        </div>
+        <div class="prop-row">
+          <span class="prop-label">文字位置</span>
+          <select class="prop-input" id="propConnLabelPos" onchange="updatePropConnLabelPos(this.value)">
+            <option value="auto">自动（竖线在右、横线在上方）</option>
+            <option value="above">线上方</option>
+            <option value="right">线右侧</option>
+          </select>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);line-height:1.5;margin:8px 0 0;">
+          提示：双击连线或点击线上文字改条件；拖拽两端圆点可改接节点。
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 模板选择弹窗 -->
+<div class="template-overlay" id="templateOverlay" onclick="if(event.target===this)hideTemplateDialog()">
+  <div class="template-dialog" style="position:relative;">
+    <button class="dialog-close-btn" onclick="hideTemplateDialog()" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="template-dialog-title">选择流程模板</div>
+    <div class="template-dialog-subtitle">点击模板一键生成流程图，生成后可自由编辑</div>
+    <div class="template-dialog-grid" id="templateDialogGrid"></div>
+  </div>
+</div>
+
+<!-- 右键菜单 -->
+<div class="context-menu" id="contextMenu">
+  <div class="context-menu-item" onclick="editLabel()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    编辑文字
+    <span class="context-menu-shortcut">双击</span>
+  </div>
+  <div class="context-menu-item" onclick="duplicateSelected()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+    复制
+    <span class="context-menu-shortcut">Ctrl+D</span>
+  </div>
+  <div class="context-menu-divider"></div>
+  <div class="context-menu-item" onclick="bringToFront()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 11 12 6 7 11"/><polyline points="17 18 12 13 7 18"/></svg>
+    置于顶层
+  </div>
+  <div class="context-menu-item" onclick="sendToBack()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 13 12 18 17 13"/><polyline points="7 6 12 11 17 6"/></svg>
+    置于底层
+  </div>
+  <div class="context-menu-divider"></div>
+  <div class="context-menu-item danger" onclick="deleteSelected()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+    删除
+    <span class="context-menu-shortcut">Del</span>
+  </div>
+</div>
+
+<!-- 连线右键菜单 -->
+<div class="conn-context-menu" id="connContextMenu">
+  <div class="context-menu-item" onclick="editConnectionLabel()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    编辑条件标签
+    <span class="context-menu-shortcut">双击</span>
+  </div>
+  <div class="context-menu-item" onclick="focusConnectionProperties()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    改起点 / 终点
+  </div>
+  <div class="context-menu-divider"></div>
+  <div class="context-menu-item danger" onclick="deleteConnectionFromMenu()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+    删除连线
+    <span class="context-menu-shortcut">Del</span>
+  </div>
+</div>
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- 隐藏的文件输入 -->
+<input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFileLoad(event)">
+<input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none" onchange="handleExcelLoad(event)">
+
+<!-- Excel 数据导入导出 -->
+<div class="confirm-overlay" id="excelDataOverlay" onclick="if(event.target===this)hideExcelDataDialog()">
+  <div class="confirm-dialog excel-data-dialog">
+    <button class="dialog-close-btn" onclick="hideExcelDataDialog()" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="confirm-title">Excel 数据 — 导入 / 导出</div>
+    <ol class="excel-steps">
+      <li>点击「下载空白模板」，得到带示例和填写说明的 Excel 文件</li>
+      <li>在「节点表」「连线表」中按列名填写（列名与右侧属性、表格编辑一致）</li>
+      <li>保存 Excel 后，点击「上传并导入」生成流程图</li>
+    </ol>
+    <table class="excel-spec-table">
+      <tr><th>列名（节点表）</th><th>说明</th><th>必填</th></tr>
+      <tr><td>编号</td><td>节点编号，连线用同一编号关联</td><td>是</td></tr>
+      <tr><td>简介</td><td>形状上显示的一行标题</td><td>建议</td></tr>
+      <tr><td>角色</td><td>负责角色（如申请人、经理）</td><td>否</td></tr>
+      <tr><td>形状</td><td>图形类型，见模板「填写说明」sheet</td><td>否</td></tr>
+      <tr><td>详细说明</td><td>步骤详细内容介绍</td><td>否</td></tr>
+      <tr><td>耗时天</td><td>该步骤需时（天，可小数）</td><td>否</td></tr>
+      <tr><td>泳道</td><td>泳道图分区（从 0 起）</td><td>否</td></tr>
+      <tr><td>图层</td><td>图层编号</td><td>否</td></tr>
+      <tr><td>目标页</td><td>跨页引用时填目标页名称</td><td>否</td></tr>
+    </table>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:8px;">连线表列：起点编号 · 终点编号 · 条件（可选）</p>
+    <div class="excel-data-actions">
+      <button type="button" onclick="exportExcelTemplate()">① 下载空白模板</button>
+      <button type="button" onclick="exportCanvasToExcel()">导出当前流程到 Excel</button>
+      <button type="button" class="primary" onclick="triggerExcelUpload()">② 上传并导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 下载格式选择 -->
+<div class="confirm-overlay" id="exportOverlay" onclick="if(event.target===this)hideExportDialog()">
+  <div class="confirm-dialog" style="max-width:420px;">
+    <button class="dialog-close-btn" onclick="hideExportDialog()" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="confirm-title">下载流程图</div>
+    <div class="confirm-msg" style="margin-top:8px;">选择导出格式（用于分享或打印）</div>
+    <div class="export-format-grid">
+      <button type="button" class="export-format-btn" onclick="runExport('png')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        PNG 图片
+      </button>
+      <button type="button" class="export-format-btn" onclick="runExport('svg')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/></svg>
+        SVG 矢量
+      </button>
+      <button type="button" class="export-format-btn" onclick="runExport('pdf')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        PDF 文档
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置与更新 -->
+<div class="confirm-overlay" id="settingsOverlay" onclick="if(event.target===this)hideSettingsDialog()">
+  <div class="confirm-dialog settings-dialog" style="max-width:480px;">
+    <button class="dialog-close-btn" onclick="hideSettingsDialog()" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="confirm-title" data-i18n="dialog.settings.title">设置与更新</div>
+    <p class="settings-version"><span data-i18n="dialog.settings.version">当前版本</span>：<strong id="settingsVersion">—</strong></p>
+    <p class="settings-hint" data-i18n="dialog.settings.hint">内容包可远程更新：连线方式、字体、侧边栏图标。主程序大版本仍走 Releases。</p>
+    <label class="settings-field">
+      <span data-i18n="dialog.settings.language">界面语言</span>
+      <select id="settingsLanguage" onchange="setAppLanguage(this.value)">
+        <option value="zh-CN">中文</option>
+        <option value="en">English</option>
+      </select>
+    </label>
+    <label class="settings-field">
+      <span data-i18n="dialog.settings.github">GitHub 仓库</span>
+      <input type="text" id="settingsGithubRepo" placeholder="yourname/DiagramWeave" autocomplete="off">
+    </label>
+    <label class="settings-field">
+      <span data-i18n="dialog.settings.updateUrl">更新检查地址（可选）</span>
+      <input type="url" id="settingsUpdateCheckUrl" placeholder="留空则自动从 GitHub raw manifest 检查" autocomplete="off">
+    </label>
+    <label class="settings-field">
+      <span data-i18n="dialog.settings.releaseUrl">发布页地址（可选）</span>
+      <input type="url" id="settingsReleasePageUrl" placeholder="留空则使用 GitHub Releases" autocomplete="off">
+    </label>
+    <p class="settings-pack-status" id="settingsPackStatus"></p>
+    <p class="settings-update-status" id="settingsUpdateStatus"></p>
+    <div class="settings-actions">
+      <button type="button" class="toolbar-btn" onclick="saveSettingsFromDialog()" data-i18n="dialog.settings.save">保存设置</button>
+      <button type="button" class="toolbar-btn" onclick="syncContentPackFromSettings()" data-i18n="dialog.settings.syncPack">同步内容包</button>
+      <button type="button" class="toolbar-btn" onclick="runUpdateCheckFromSettings()" data-i18n="dialog.settings.checkUpdate">检查更新</button>
+      <button type="button" class="toolbar-btn primary" id="settingsOpenReleaseBtn" onclick="openReleasePageFromSettings()" data-i18n="dialog.settings.openRelease">打开下载页</button>
+    </div>
+    <p class="settings-footnote" data-i18n="dialog.settings.footnote">Git 用户可双击 update-diagramweave.bat 一键拉取；ZIP 用户请在下载页获取新版本。</p>
+  </div>
+</div>
+
+<!-- 确认对话框 -->
+<div class="confirm-overlay" id="confirmOverlay" onclick="if(event.target===this)hideConfirm()">
+  <div class="confirm-dialog">
+    <button class="dialog-close-btn" onclick="hideConfirm()" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="confirm-title" id="confirmTitle">确认</div>
+    <div class="confirm-msg" id="confirmMsg">当前画布内容将被替换，是否继续？</div>
+    <div class="confirm-buttons">
+      <button class="confirm-btn confirm-btn-secondary" id="confirmCancel">取消</button>
+      <button class="confirm-btn confirm-btn-primary" id="confirmOk">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 方向选择弹窗 -->
+<div class="layout-overlay" id="layoutOverlay" onclick="if(event.target===this)hideLayoutDialog()">
+  <div class="layout-dialog" style="position:relative;">
+    <button class="dialog-close-btn" onclick="hideLayoutDialog()" title="关闭">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="layout-title">自动布局</div>
+    <div class="layout-subtitle">布局引擎</div>
+    <div class="layout-density" id="layoutEngine">
+      <button type="button" class="layout-density-btn active" data-engine="dagre" onclick="setLayoutEngine('dagre')">Sugiyama</button>
+      <button type="button" class="layout-density-btn" data-engine="spine" onclick="setLayoutEngine('spine')">主路径</button>
+      <button type="button" class="layout-density-btn" data-engine="role" onclick="setLayoutEngine('role')">角色轴</button>
+      <button type="button" class="layout-density-btn" data-engine="builtin" onclick="setLayoutEngine('builtin')">内置</button>
+    </div>
+    <div class="layout-role-row" id="layoutRoleRow">
+      <div class="layout-subtitle" style="margin-top:0">主轴角色</div>
+      <select id="layoutAnchorRole"></select>
+    </div>
+    <div class="layout-subtitle">间距密度</div>
+    <div class="layout-density" id="layoutDensity">
+      <button type="button" class="layout-density-btn" data-density="compact" onclick="setLayoutDensity('compact')">紧凑</button>
+      <button type="button" class="layout-density-btn active" data-density="normal" onclick="setLayoutDensity('normal')">标准</button>
+      <button type="button" class="layout-density-btn" data-density="loose" onclick="setLayoutDensity('loose')">宽松</button>
+    </div>
+    <div class="layout-subtitle">布局方向</div>
+    <div class="layout-options">
+      <button class="layout-option" onclick="applyAutoLayout('vertical')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        从上到下 ↓
+      </button>
+      <button class="layout-option" onclick="applyAutoLayout('horizontal')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        从左到右 →
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 流程表格编辑面板 -->
+<div class="text-editor-panel" id="textEditorPanel">
+  <div class="text-editor-header">
+    <span class="text-editor-title">表格编辑</span>
+    <p class="text-editor-help" id="textEditorHelp">节点表填步骤 · 连线表填「起点编号→终点编号」 · 画布改完点刷新 · 表格改完点应用</p>
+    <button type="button" class="text-editor-help-toggle" id="textEditorHelpToggle" onclick="toggleTextEditorHelp()" title="展开说明">说明</button>
+    <div class="text-editor-actions">
+      <button type="button" class="icon-only" onclick="syncTextFromCanvas()" title="从画布同步到表格">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.13-9.36L23 10"/></svg>
+      </button>
+      <button type="button" class="icon-only primary" onclick="applyFlowText()" title="将表格内容应用到画布">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
+      <button type="button" class="icon-only" onclick="toggleTextEditor()" title="关闭表格编辑">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="text-editor-body">
+    <div class="flow-table-bar">
+      <div class="flow-table-tabs">
+        <button type="button" class="flow-table-tab active" data-flow-tab="nodes" onclick="switchFlowTableTab('nodes')" title="编辑各步骤节点">节点表</button>
+        <button type="button" class="flow-table-tab" data-flow-tab="connections" onclick="switchFlowTableTab('connections')" title="编辑节点之间的连线">连线表 <span id="flowConnTabCount"></span></button>
+      </div>
+      <div class="flow-table-toolbar" id="flowNodeToolbar">
+        <button type="button" onclick="addFlowTableNodeRow()" title="在表格末尾添加一行空节点">+ 节点</button>
+        <button type="button" onclick="deleteFlowTableSelectedRows('nodes')" title="先点击行选中（高亮），再删除">删节点</button>
+      </div>
+      <div class="flow-table-toolbar" id="flowConnToolbar" style="display:none;">
+        <button type="button" onclick="addFlowTableConnRow()" title="添加一行：填起点编号、终点编号">+ 连线</button>
+        <button type="button" onclick="deleteFlowTableSelectedRows('connections')" title="先点击行选中（高亮），再删除">删连线</button>
+      </div>
+    </div>
+    <div class="flow-table-scroll">
+      <table class="flow-data-table" id="flowNodeTable">
+        <thead>
+          <tr>
+            <th class="col-num">编号</th>
+            <th class="col-brief">简介</th>
+            <th>去向</th>
+            <th>角色</th>
+            <th>图形</th>
+            <th class="col-detail">详细说明</th>
+            <th>耗时天</th>
+            <th>泳道</th>
+            <th>图层</th>
+            <th>目标页</th>
+          </tr>
+        </thead>
+        <tbody id="flowNodeTableBody"></tbody>
+      </table>
+      <table class="flow-data-table" id="flowConnTable" style="display:none;">
+        <thead>
+          <tr>
+            <th class="col-num">起点</th>
+            <th class="col-num">终点</th>
+            <th>条件</th>
+          </tr>
+        </thead>
+        <tbody id="flowConnTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="text-editor-hint" id="textEditorHint">
+    <strong>怎么用：</strong>
+    ① 顶部工具栏点「表格」图标打开本面板。
+    ② <strong>节点表</strong>：每行一个步骤（编号唯一），「去向」列只读，由连线自动算出。
+    ③ <strong>连线表</strong>：每行一条箭头，填起点编号、终点编号、条件（如「是/否」）；也可在画布用连线工具拖拽。
+    ④ 在画布改形状/连线 → 点 <strong>↺ 刷新</strong>；在表格改内容 → 点 <strong>✓ 应用</strong>（会重新布局）。
+    ⑤ 删除：先<strong>点击表格行</strong>使其高亮，再点「删节点/删连线」。
+  </div>
+  <textarea id="flowTextArea" style="display:none" aria-hidden="true"></textarea>
+</div>
+
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/dagre.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/svg2pdf.umd.min.js"></script>
+<script src="diagramweave-bootstrap.js"></script>
+<script src="flowchart-sanitize.js"></script>
+<script src="diagramweave-i18n.js"></script>
+<script src="diagramweave-content-pack.js"></script>
+<script src="flowchart-export-shapes.js"></script>
+<script src="flowchart-extensions.js"></script>
+<script src="flowchart-editor.js"></script>
+</body>
+</html>
