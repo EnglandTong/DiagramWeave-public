@@ -27,22 +27,76 @@ function commandName(cmd) {
     : cmd;
 }
 
+function executableCandidates(cmd) {
+  const normalized = commandName(cmd);
+  if (!isWin || !['npm.cmd', 'npx.cmd', 'corepack.cmd'].includes(normalized)) return [normalized];
+
+  const candidates = [
+    normalized,
+    join(dirname(process.execPath), normalized),
+  ];
+  if (process.env.ProgramFiles) candidates.push(join(process.env.ProgramFiles, 'nodejs', normalized));
+  if (process.env['ProgramFiles(x86)']) candidates.push(join(process.env['ProgramFiles(x86)'], 'nodejs', normalized));
+  return [...new Set(candidates)];
+}
+
 function run(label, cmd, args) {
   console.log(`> ${label}`);
-  const result = spawnSync(commandName(cmd), args, {
-    cwd: root,
-    stdio: 'inherit',
-    shell: false,
-  });
-  if (result.status !== 0) {
+  let lastResult = null;
+  for (const candidate of executableCandidates(cmd)) {
+    if (candidate !== commandName(cmd) && !existsSync(candidate)) continue;
+    const result = spawnSync(candidate, args, {
+      cwd: root,
+      stdio: 'inherit',
+      shell: false,
+    });
+    lastResult = result;
+    if (!result.error && result.status === 0) return;
+    if (result.error?.code === 'ENOENT') continue;
+    break;
+  }
+  if (lastResult?.error) console.error(lastResult.error.message);
+  if (lastResult?.status !== 0) {
     console.error(`Setup failed: ${cmd} ${args.join(' ')}`);
-    process.exit(result.status || 1);
+    process.exit(lastResult?.status || 1);
   }
 }
 
 function commandOk(cmd, args = ['--version']) {
-  const result = spawnSync(commandName(cmd), args, { cwd: root, stdio: 'ignore', shell: false });
-  return result.status === 0;
+  for (const candidate of executableCandidates(cmd)) {
+    if (candidate !== commandName(cmd) && !existsSync(candidate)) continue;
+    const result = spawnSync(candidate, args, { cwd: root, stdio: 'ignore', shell: false });
+    if (!result.error && result.status === 0) return true;
+  }
+  return false;
+}
+
+function npmCliCandidates() {
+  const nodeDir = dirname(process.execPath);
+  const candidates = [
+    join(nodeDir, 'node_modules/npm/bin/npm-cli.js'),
+  ];
+  if (process.env.ProgramFiles) candidates.push(join(process.env.ProgramFiles, 'nodejs/node_modules/npm/bin/npm-cli.js'));
+  if (process.env['ProgramFiles(x86)']) candidates.push(join(process.env['ProgramFiles(x86)'], 'nodejs/node_modules/npm/bin/npm-cli.js'));
+  return [...new Set(candidates)];
+}
+
+function resolveNpmCli() {
+  for (const cli of npmCliCandidates()) {
+    if (!existsSync(cli)) continue;
+    const result = spawnSync(process.execPath, [cli, '--version'], { cwd: root, stdio: 'ignore', shell: false });
+    if (!result.error && result.status === 0) return cli;
+  }
+  return null;
+}
+
+function resolveCommand(cmd) {
+  for (const candidate of executableCandidates(cmd)) {
+    if (candidate !== commandName(cmd) && !existsSync(candidate)) continue;
+    const result = spawnSync(candidate, ['--version'], { cwd: root, stdio: 'ignore', shell: false });
+    if (!result.error && result.status === 0) return candidate;
+  }
+  return null;
 }
 
 function depsReady() {
@@ -61,7 +115,10 @@ function resolveInstallCommand() {
     if (commandOk('pnpm')) return { cmd: 'pnpm', args: ['install'] };
     return { cmd: 'corepack', args: ['pnpm', 'install'] };
   }
-  if (commandOk('npm')) return { cmd: 'npm', args: ['install'] };
+  const npmCli = resolveNpmCli();
+  if (npmCli) return { cmd: process.execPath, args: [npmCli, 'install'] };
+  const npmCmd = resolveCommand('npm');
+  if (npmCmd) return { cmd: npmCmd, args: ['install'] };
   return null;
 }
 
