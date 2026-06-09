@@ -191,6 +191,8 @@
 
       return {
         version: 2,
+        projectName: sanitizeTextField(data.projectName, 80),
+        autosaveSeconds: sanitizeNum(data.autosaveSeconds, 5, 3600, 30),
         pages,
         currentPageId,
         nextPageId: sanitizeNum(data.nextPageId, 1, 99999, pages.length + 1),
@@ -210,6 +212,8 @@
 
       return {
         version: 1,
+        projectName: sanitizeTextField(data.projectName, 80),
+        autosaveSeconds: sanitizeNum(data.autosaveSeconds, 5, 3600, 30),
         nodes: page.nodes,
         connections: page.connections,
         nextId: sanitizeNum(data.nextId, 1, 999999, page.nodes.length + 1),

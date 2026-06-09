@@ -2,6 +2,7 @@
   "app.title": "DiagramWeave - 流程图编辑器",
   "app.subtitle": "流程图编辑器",
   "toolbar.select": "选择 (V)",
+  "toolbar.newProject": "新项目",
   "toolbar.connect": "连线 (L)",
   "toolbar.pan": "移动画面 (H)",
   "toolbar.undo": "撤销 (Ctrl+Z)",
@@ -31,5 +32,7 @@
   "sidebar.basic": "基本图形",
   "sidebar.extended": "扩展图形",
   "sidebar.remoteIcons": "远程图标",
-  "sidebar.layers": "图层"
+  "sidebar.layers": "图层",
+  "dialog.settings.projectName": "Project Name",
+  "dialog.settings.autosaveSeconds": "自动保存间隔（秒）"
 }

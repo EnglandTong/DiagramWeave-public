@@ -45,6 +45,17 @@ const MAX_EXCEL_LABEL_LENGTH = 80;
 const MAX_EXCEL_ROLE_LENGTH = 80;
 const MAX_EXCEL_DETAIL_LENGTH = 800;
 const MAX_EXCEL_TARGET_PAGE_LENGTH = 80;
+const DEFAULT_PROJECT_NAME = 'Untitled Project';
+const DEFAULT_AUTOSAVE_SECONDS = 30;
+
+const projectSession = {
+  name: DEFAULT_PROJECT_NAME,
+  autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
+  fileHandle: null,
+  autosaveTimer: null,
+  saving: false,
+  lastSavedAt: null,
+};
 
 // ===== 演示模式状态 =====
 const presentState = {
@@ -568,7 +579,7 @@ function applyTemplate(index) {
 }
 
 // ===== 确认对话框 =====
-function showConfirm(title, msg, onOk) {
+function showConfirm(title, msg, onOk, onCancel) {
   const overlay = document.getElementById('confirmOverlay');
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmMsg').textContent = msg;
@@ -584,7 +595,7 @@ function showConfirm(title, msg, onOk) {
   };
 
   okBtn.onclick = () => { cleanup(); if (onOk) onOk(); };
-  cancelBtn.onclick = cleanup;
+  cancelBtn.onclick = () => { cleanup(); if (onCancel) onCancel(); };
 }
 
 function hideConfirm() {
@@ -3974,11 +3985,188 @@ function exportPDF() {
 }
 
 // ===== 导出/导入 JSON =====
+function normalizeProjectName(name) {
+  return String(name || '').replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().slice(0, 80) || DEFAULT_PROJECT_NAME;
+}
+
+function normalizeAutosaveSeconds(value) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) return DEFAULT_AUTOSAVE_SECONDS;
+  return Math.min(3600, Math.max(5, n));
+}
+
+function getProjectFileBaseName() {
+  return normalizeProjectName(projectSession.name).replace(/\s+/g, '_') || 'DiagramWeave';
+}
+
+function fileSystemAccessSupported() {
+  return typeof window.showSaveFilePicker === 'function'
+    && typeof window.showOpenFilePicker === 'function';
+}
+
+function updateProjectTitle() {
+  const name = normalizeProjectName(projectSession.name);
+  projectSession.name = name;
+  const el = document.getElementById('toolbarProjectName');
+  if (el) {
+    el.textContent = name;
+    el.title = name;
+  }
+  document.title = `${name} - DiagramWeave`;
+}
+
+function restartAutosaveTimer() {
+  if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
+  projectSession.autosaveTimer = null;
+  if (!projectSession.fileHandle) return;
+  projectSession.autosaveTimer = setInterval(() => {
+    saveProjectFile({ autosave: true });
+  }, projectSession.autosaveSeconds * 1000);
+}
+
+async function writeProjectFile(fileHandle) {
+  const payload = getFlowDocumentPayload();
+  const writable = await fileHandle.createWritable();
+  await writable.write(JSON.stringify(payload, null, 2));
+  await writable.close();
+  projectSession.lastSavedAt = new Date();
+}
+
+function downloadProjectJson() {
+  const payload = getFlowDocumentPayload();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = getProjectFileBaseName() + '.diagramweave.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function requestProjectSaveAs() {
+  if (!fileSystemAccessSupported()) {
+    downloadProjectJson();
+    showToast('浏览器不支持自动保存到原文件，已改为下载工作文件');
+    return false;
+  }
+  const handle = await window.showSaveFilePicker({
+    suggestedName: getProjectFileBaseName() + '.diagramweave.json',
+    types: [{
+      description: 'DiagramWeave Project',
+      accept: { 'application/json': ['.diagramweave.json', '.json'] },
+    }],
+  });
+  await writeProjectFile(handle);
+  projectSession.fileHandle = handle;
+  restartAutosaveTimer();
+  return true;
+}
+
+async function saveProjectFile(options = {}) {
+  if (projectSession.saving) return false;
+  projectSession.saving = true;
+  try {
+    if (!projectSession.fileHandle) {
+      if (options.autosave) return false;
+      const ok = await requestProjectSaveAs();
+      if (ok) showToast('已保存工作文件，自动保存已启用');
+      return ok;
+    }
+    await writeProjectFile(projectSession.fileHandle);
+    if (!options.autosave) showToast('已保存工作文件');
+    return true;
+  } catch (err) {
+    if (err?.name !== 'AbortError') showToast((options.autosave ? '自动保存失败：' : '保存失败：') + err.message);
+    return false;
+  } finally {
+    projectSession.saving = false;
+  }
+}
+
+async function openProjectFileWithPicker() {
+  const [handle] = await window.showOpenFilePicker({
+    multiple: false,
+    types: [{
+      description: 'DiagramWeave Project',
+      accept: { 'application/json': ['.diagramweave.json', '.json'] },
+    }],
+  });
+  const file = await handle.getFile();
+  const raw = JSON.parse(await file.text());
+  if (loadFlowDocumentPayload(raw)) {
+    projectSession.fileHandle = handle;
+    if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
+    updateProjectTitle();
+    restartAutosaveTimer();
+    showToast('已打开工作文件，自动保存已启用');
+  }
+}
+
+async function ensureProjectFileForAutosave() {
+  if (projectSession.fileHandle) return true;
+  const ok = await requestProjectSaveAs();
+  if (!ok) showToast('未选择保存位置，自动保存暂不可用');
+  return ok;
+}
+
+function resetToBlankProject() {
+  projectSession.fileHandle = null;
+  projectSession.lastSavedAt = null;
+  if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
+  projectSession.autosaveTimer = null;
+  projectSession.name = DEFAULT_PROJECT_NAME;
+  state.nodes = [];
+  state.connections = [];
+  state.nextId = 1;
+  state.selectedNodeId = null;
+  state.selectedConnectionId = null;
+  state.undoStack = [];
+  state.redoStack = [];
+  if (typeof DiagramWeave !== 'undefined') DiagramWeave.initDocument();
+  clearCanvasNodes();
+  renderAll();
+  updateProjectTitle();
+}
+
+async function startBlankProjectAndSave() {
+  resetToBlankProject();
+  await ensureProjectFileForAutosave();
+  updateProjectTitle();
+}
+
+function newProject() {
+  showConfirm(
+    '新项目',
+    '开始新项目之前，是否先保存当前项目？',
+    async () => {
+      await saveProjectFile();
+      await startBlankProjectAndSave();
+    },
+    async () => {
+      await startBlankProjectAndSave();
+    },
+  );
+}
+
+function promptInitialProjectSave() {
+  if (projectSession.fileHandle || sessionStorage.getItem('dw-initial-save-prompted')) return;
+  sessionStorage.setItem('dw-initial-save-prompted', '1');
+  showConfirm(
+    '新项目',
+    '这是一个新项目。是否先保存新档案以启用自动保存？',
+    async () => {
+      await ensureProjectFileForAutosave();
+    },
+  );
+}
+
 function getFlowDocumentPayload() {
   if (typeof DiagramWeave !== 'undefined') DiagramWeave.syncPageFromState();
-  return typeof DiagramWeave !== 'undefined'
+  const payload = typeof DiagramWeave !== 'undefined'
     ? DiagramWeave.serializeDocument()
     : { version: 1, nodes: state.nodes, connections: state.connections, nextId: state.nextId, connRouteMode: state.connRouteMode };
+  payload.projectName = projectSession.name;
+  payload.autosaveSeconds = projectSession.autosaveSeconds;
+  return payload;
 }
 
 function loadFlowDocumentPayload(raw) {
@@ -3991,15 +4179,21 @@ function loadFlowDocumentPayload(raw) {
   }
   if (data.version === 2 && data.pages && typeof DiagramWeave !== 'undefined') {
     saveState();
+    projectSession.name = normalizeProjectName(data.projectName || raw.projectName || projectSession.name);
+    projectSession.autosaveSeconds = normalizeAutosaveSeconds(data.autosaveSeconds || raw.autosaveSeconds || projectSession.autosaveSeconds);
     DiagramWeave.loadDocument(data);
     applyConnRouteModeFromData(data.connRouteMode);
     clearCanvasNodes();
     renderAll();
+    updateProjectTitle();
+    restartAutosaveTimer();
     showToast(`已加载 ${data.pages.length} 个页面`);
     return true;
   }
   if (data.nodes && data.connections) {
     saveState();
+    projectSession.name = normalizeProjectName(data.projectName || raw.projectName || projectSession.name);
+    projectSession.autosaveSeconds = normalizeAutosaveSeconds(data.autosaveSeconds || raw.autosaveSeconds || projectSession.autosaveSeconds);
     state.nodes = data.nodes;
     state.connections = data.connections;
     state.nextId = data.nextId || state.nodes.length + 1;
@@ -4016,6 +4210,8 @@ function loadFlowDocumentPayload(raw) {
     ensureNodeRefIds();
     clearCanvasNodes();
     renderAll();
+    updateProjectTitle();
+    restartAutosaveTimer();
     showToast('已加载：形状位置与连线已按文件恢复');
     return true;
   }
@@ -4023,18 +4219,20 @@ function loadFlowDocumentPayload(raw) {
   return false;
 }
 
-function exportJSON() {
-  const payload = getFlowDocumentPayload();
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = getExportBaseName() + '.diagramweave.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  showToast('已保存工作文件（含位置与连线，下次加载原样恢复）');
+async function exportJSON() {
+  await saveProjectFile();
 }
 
-function importJSON() {
+async function importJSON() {
+  if (fileSystemAccessSupported()) {
+    try {
+      await openProjectFileWithPicker();
+      return;
+    } catch (err) {
+      if (err?.name !== 'AbortError') showToast('打开文件失败：' + err.message);
+      return;
+    }
+  }
   document.getElementById('fileInput').click();
 }
 
@@ -4045,7 +4243,14 @@ function handleFileLoad(e) {
   reader.onload = (ev) => {
     try {
       const raw = JSON.parse(ev.target.result);
-      loadFlowDocumentPayload(raw);
+      const loaded = loadFlowDocumentPayload(raw);
+      if (loaded) {
+        projectSession.fileHandle = null;
+        if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
+        updateProjectTitle();
+        restartAutosaveTimer();
+        showToast('浏览器不支持原文件自动保存；请使用保存按钮下载更新后的工作文件');
+      }
     } catch (err) {
       showToast('文件格式错误');
     }
@@ -5255,6 +5460,8 @@ function showSettingsDialog() {
   if (setLang && typeof DiagramWeaveI18n !== 'undefined') {
     setLang.value = DiagramWeaveI18n.getLocale();
   }
+  document.getElementById('settingsProjectName').value = projectSession.name;
+  document.getElementById('settingsAutosaveSeconds').value = projectSession.autosaveSeconds;
   if (typeof DiagramWeaveI18n !== 'undefined') DiagramWeaveI18n.applyDom(document.getElementById('settingsOverlay'));
   document.getElementById('settingsUpdateStatus').textContent = '';
   const packStatus = document.getElementById('settingsPackStatus');
@@ -5279,6 +5486,10 @@ function hideSettingsDialog() {
 
 function saveSettingsFromDialog() {
   if (typeof DiagramWeaveBootstrap === 'undefined') return;
+  projectSession.name = normalizeProjectName(document.getElementById('settingsProjectName').value);
+  projectSession.autosaveSeconds = normalizeAutosaveSeconds(document.getElementById('settingsAutosaveSeconds').value);
+  updateProjectTitle();
+  restartAutosaveTimer();
   DiagramWeaveBootstrap.saveUpdateSettings({
     githubRepo: document.getElementById('settingsGithubRepo').value,
     updateCheckUrl: document.getElementById('settingsUpdateCheckUrl').value,
@@ -5369,12 +5580,15 @@ async function bootDiagramWeave() {
   initShapeTypeSelect();
   setTool('select');
   initTemplates();
+  updateProjectTitle();
+  restartAutosaveTimer();
 
   if (typeof DiagramWeave !== 'undefined') {
     DiagramWeave.initDocument();
     DiagramWeave.loadChineseFont();
   }
   renderAll();
+  setTimeout(promptInitialProjectSave, 600);
 
   if (location.protocol === 'file:' && !sessionStorage.getItem('fc-file-protocol-hint')) {
     sessionStorage.setItem('fc-file-protocol-hint', '1');

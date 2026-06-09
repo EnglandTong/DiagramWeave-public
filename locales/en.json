@@ -2,6 +2,7 @@
   "app.title": "DiagramWeave - Flowchart Editor",
   "app.subtitle": "Flowchart Editor",
   "toolbar.select": "Select (V)",
+  "toolbar.newProject": "New Project",
   "toolbar.connect": "Connect (L)",
   "toolbar.pan": "Pan canvas (H)",
   "toolbar.undo": "Undo (Ctrl+Z)",
@@ -31,5 +32,7 @@
   "sidebar.basic": "Basic shapes",
   "sidebar.extended": "Extended shapes",
   "sidebar.remoteIcons": "Remote icons",
-  "sidebar.layers": "Layers"
+  "sidebar.layers": "Layers",
+  "dialog.settings.projectName": "Project Name",
+  "dialog.settings.autosaveSeconds": "Auto-save interval (seconds)"
 }

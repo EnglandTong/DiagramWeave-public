@@ -181,6 +181,23 @@
 
   .toolbar-spacer { flex: 1; }
 
+  .toolbar-project-title {
+    min-width: 140px;
+    max-width: 34vw;
+    height: 28px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+  }
+
   .toolbar-zoom {
     display: flex;
     align-items: center;

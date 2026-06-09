@@ -19,6 +19,10 @@
 
   <div class="toolbar-divider"></div>
 
+  <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="newProject()" data-i18n-title="toolbar.newProject">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+  </button>
+
   <button class="toolbar-btn icon-only toolbar-hide-in-present" id="btn-select" onclick="setTool('select')" data-i18n-title="toolbar.select">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
   </button>
@@ -59,7 +63,14 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
   </button>
   <button class="toolbar-btn icon-only danger toolbar-hide-in-present" onclick="clearCanvas()" data-i18n-title="toolbar.clear">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4l5 5"/><path d="M13 6l5 5"/><path d="M3 21l8.5-8.5"/><path d="M8 16l-2-2"/><path d="M11 13l-2-2"/><path d="M14 10l-2-2"/><path d="M6 18l-3-3"/><path d="M18 11l-7 7"/><path d="M12 18h7"/></svg>
+  </button>
+
+  <div class="toolbar-spacer toolbar-hide-in-present"></div>
+
+  <div class="toolbar-project-title toolbar-hide-in-present" id="toolbarProjectName">Untitled Project</div>
+  <button class="toolbar-btn icon-only present-btn toolbar-hide-in-present" onclick="enterPresentation()" data-i18n-title="toolbar.present">
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6,3 20,12 6,21"/></svg>
   </button>
 
   <div class="toolbar-spacer toolbar-hide-in-present"></div>
@@ -75,9 +86,6 @@
 
   <div class="toolbar-divider toolbar-hide-in-present"></div>
 
-  <button class="toolbar-btn icon-only present-btn toolbar-hide-in-present" onclick="enterPresentation()" data-i18n-title="toolbar.present">
-    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6,3 20,12 6,21"/></svg>
-  </button>
   <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="showExportDialog()" data-i18n-title="toolbar.export">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
   </button>
@@ -651,6 +659,14 @@
         <option value="zh-CN">中文</option>
         <option value="en">English</option>
       </select>
+    </label>
+    <label class="settings-field">
+      <span data-i18n="dialog.settings.projectName">Project Name</span>
+      <input type="text" id="settingsProjectName" maxlength="80" autocomplete="off">
+    </label>
+    <label class="settings-field">
+      <span data-i18n="dialog.settings.autosaveSeconds">Auto-save interval (seconds)</span>
+      <input type="number" id="settingsAutosaveSeconds" min="5" max="3600" step="5" autocomplete="off">
     </label>
     <label class="settings-field">
       <span data-i18n="dialog.settings.github">GitHub 仓库</span>
