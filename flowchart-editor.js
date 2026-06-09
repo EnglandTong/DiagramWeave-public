@@ -3974,11 +3974,57 @@ function exportPDF() {
 }
 
 // ===== 导出/导入 JSON =====
-function exportJSON() {
+function getFlowDocumentPayload() {
   if (typeof DiagramWeave !== 'undefined') DiagramWeave.syncPageFromState();
-  const payload = typeof DiagramWeave !== 'undefined'
+  return typeof DiagramWeave !== 'undefined'
     ? DiagramWeave.serializeDocument()
     : { version: 1, nodes: state.nodes, connections: state.connections, nextId: state.nextId, connRouteMode: state.connRouteMode };
+}
+
+function loadFlowDocumentPayload(raw) {
+  const data = typeof DiagramWeaveSanitize !== 'undefined'
+    ? DiagramWeaveSanitize.sanitizeFlowDocument(raw, { knownShapes: shapeDefaults })
+    : raw;
+  if (!data) {
+    showToast('文件格式无效或数据被拒绝');
+    return false;
+  }
+  if (data.version === 2 && data.pages && typeof DiagramWeave !== 'undefined') {
+    saveState();
+    DiagramWeave.loadDocument(data);
+    applyConnRouteModeFromData(data.connRouteMode);
+    clearCanvasNodes();
+    renderAll();
+    showToast(`已加载 ${data.pages.length} 个页面`);
+    return true;
+  }
+  if (data.nodes && data.connections) {
+    saveState();
+    state.nodes = data.nodes;
+    state.connections = data.connections;
+    state.nextId = data.nextId || state.nodes.length + 1;
+    state.selectedNodeId = null;
+    state.selectedConnectionId = null;
+    if (typeof DiagramWeave !== 'undefined') {
+      const page = DiagramWeave.getCurrentPage();
+      if (page) {
+        page.nodes = state.nodes;
+        page.connections = state.connections;
+      }
+    }
+    applyConnRouteModeFromData(data.connRouteMode);
+    ensureNodeRefIds();
+    clearCanvasNodes();
+    renderAll();
+    showToast('已加载：形状位置与连线已按文件恢复');
+    return true;
+  }
+  showToast('文件格式无效或数据被拒绝');
+  return false;
+}
+
+function exportJSON() {
+  const payload = getFlowDocumentPayload();
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3999,42 +4045,7 @@ function handleFileLoad(e) {
   reader.onload = (ev) => {
     try {
       const raw = JSON.parse(ev.target.result);
-      const data = typeof DiagramWeaveSanitize !== 'undefined'
-        ? DiagramWeaveSanitize.sanitizeFlowDocument(raw, { knownShapes: shapeDefaults })
-        : raw;
-      if (!data) {
-        showToast('文件格式无效或数据被拒绝');
-        return;
-      }
-      if (data.version === 2 && data.pages && typeof DiagramWeave !== 'undefined') {
-        saveState();
-        DiagramWeave.loadDocument(data);
-        applyConnRouteModeFromData(data.connRouteMode);
-        clearCanvasNodes();
-        renderAll();
-        showToast(`已加载 ${data.pages.length} 个页面`);
-      } else if (data.nodes && data.connections) {
-        saveState();
-        state.nodes = data.nodes;
-        state.connections = data.connections;
-        state.nextId = data.nextId || state.nodes.length + 1;
-        state.selectedNodeId = null;
-        state.selectedConnectionId = null;
-        if (typeof DiagramWeave !== 'undefined') {
-          const page = DiagramWeave.getCurrentPage();
-          if (page) {
-            page.nodes = state.nodes;
-            page.connections = state.connections;
-          }
-        }
-        applyConnRouteModeFromData(data.connRouteMode);
-        ensureNodeRefIds();
-        clearCanvasNodes();
-        renderAll();
-        showToast('已加载：形状位置与连线已按文件恢复');
-      } else {
-        showToast('文件格式无效或数据被拒绝');
-      }
+      loadFlowDocumentPayload(raw);
     } catch (err) {
       showToast('文件格式错误');
     }
@@ -4945,6 +4956,44 @@ function exportCanvasToExcel() {
   showToast('已导出当前流程到 Excel');
 }
 
+function exportProjectToExcel() {
+  if (typeof XLSX === 'undefined') {
+    showToast('Excel 库未加载，请确认 vendor 目录完整');
+    return;
+  }
+  const payload = getFlowDocumentPayload();
+  const json = JSON.stringify(payload, null, 2);
+  const chunkSize = 30000;
+  const chunks = [];
+  for (let i = 0; i < json.length; i += chunkSize) chunks.push(json.slice(i, i + chunkSize));
+
+  const wb = XLSX.utils.book_new();
+  const summaryRows = [
+    ['DiagramWeave 完整工作文件'],
+    ['说明', '此 Excel 可作为 JSON 之外的完整备份格式。请用 DiagramWeave 的“加载完整工作文件 Excel”恢复。'],
+    ['保存时间', new Date().toISOString()],
+    ['页面/节点/连线等完整数据保存在隐藏工作表 _DiagramWeaveJSON 中。'],
+  ];
+  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+  summarySheet['!cols'] = [{ wch: 18 }, { wch: 86 }];
+  XLSX.utils.book_append_sheet(wb, summarySheet, '说明');
+
+  const dataRows = [
+    ['format', 'DiagramWeaveProjectExcel'],
+    ['version', '1'],
+    ['chunkCount', String(chunks.length)],
+    ...chunks.map((chunk, index) => [`chunk${index + 1}`, chunk]),
+  ];
+  const dataSheet = XLSX.utils.aoa_to_sheet(dataRows);
+  dataSheet['!cols'] = [{ wch: 14 }, { wch: 100 }];
+  XLSX.utils.book_append_sheet(wb, dataSheet, '_DiagramWeaveJSON');
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Sheets = [{ Hidden: 0 }, { Hidden: 1 }];
+
+  XLSX.writeFile(wb, getExportBaseName() + '.diagramweave.xlsx');
+  showToast('已保存完整 Excel 工作文件');
+}
+
 function buildExcelWorkbook(data, filename) {
   const wb = XLSX.utils.book_new();
   const nodeData = data?.nodeData ?? [
@@ -5047,6 +5096,58 @@ function hideExcelDataDialog() {
 
 function triggerExcelUpload() {
   document.getElementById('excelInput').click();
+}
+
+function triggerProjectExcelUpload() {
+  document.getElementById('projectExcelInput').click();
+}
+
+function handleProjectExcelLoad(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (typeof XLSX === 'undefined') {
+    showToast('Excel 库未加载，请确认 vendor 目录完整');
+    e.target.value = '';
+    return;
+  }
+  processProjectExcelFile(file);
+  e.target.value = '';
+}
+
+function processProjectExcelFile(file) {
+  if (file.size > MAX_EXCEL_FILE_BYTES) {
+    showToast(`Excel 文件过大，最大允许 5MB`);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
+      const sheetName = workbook.SheetNames.find(n => n === '_DiagramWeaveJSON' || n === 'DiagramWeaveJSON');
+      if (!sheetName) {
+        showToast('未找到完整工作文件数据，请使用“上传并导入”读取普通 Excel 数据表');
+        return;
+      }
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, blankrows: false });
+      const map = new Map(rows.map(row => [String(row[0] || ''), String(row[1] || '')]));
+      if (map.get('format') !== 'DiagramWeaveProjectExcel') {
+        showToast('Excel 工作文件格式无效');
+        return;
+      }
+      const chunkCount = Math.max(0, parseInt(map.get('chunkCount') || '0', 10));
+      let json = '';
+      for (let i = 1; i <= chunkCount; i++) json += map.get(`chunk${i}`) || '';
+      if (!json) {
+        showToast('Excel 工作文件缺少图形数据');
+        return;
+      }
+      const raw = JSON.parse(json);
+      if (loadFlowDocumentPayload(raw)) hideExcelDataDialog();
+    } catch (err) {
+      showToast('Excel 工作文件解析失败：' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function handleExcelLoad(e) {

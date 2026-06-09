@@ -570,6 +570,7 @@
 <!-- 隐藏的文件输入 -->
 <input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleFileLoad(event)">
 <input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none" onchange="handleExcelLoad(event)">
+<input type="file" id="projectExcelInput" accept=".xlsx,.xls" style="display:none" onchange="handleProjectExcelLoad(event)">
 
 <!-- Excel 数据导入导出 -->
 <div class="confirm-overlay" id="excelDataOverlay" onclick="if(event.target===this)hideExcelDataDialog()">
@@ -600,6 +601,12 @@
       <button type="button" onclick="exportExcelTemplate()">① 下载空白模板</button>
       <button type="button" onclick="exportCanvasToExcel()">导出当前流程到 Excel</button>
       <button type="button" class="primary" onclick="triggerExcelUpload()">② 上传并导入</button>
+    </div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:14px 0;">
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px;">完整工作文件会保留页面、图层、位置、样式、连线端口和路由设置，适合作为 JSON 之外的备份格式。</p>
+    <div class="excel-data-actions">
+      <button type="button" onclick="exportProjectToExcel()">保存完整工作文件 Excel</button>
+      <button type="button" onclick="triggerProjectExcelUpload()">加载完整工作文件 Excel</button>
     </div>
   </div>
 </div>

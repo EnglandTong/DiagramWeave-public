@@ -132,12 +132,14 @@ pnpm serve
 |---|---|
 | 保存工作文件 | 导出 `.diagramweave.json`，保留节点位置、连线、页面和图层 |
 | 加载工作文件 | 导入之前保存的 `.diagramweave.json` |
+| 保存完整工作文件 Excel | 导出 `.diagramweave.xlsx`，像 JSON 一样完整保留页面、图层、位置、样式、连接点和连线路由 |
+| 加载完整工作文件 Excel | 从 `.diagramweave.xlsx` 完整恢复图形 |
 | 导出 PNG | 生成图片，适合放入文档或聊天 |
 | 导出 SVG | 生成矢量图，适合继续用 Illustrator / Inkscape 编辑 |
 | 导出 PDF | 生成适合打印或归档的文件 |
 | Excel 模板与导入 | 下载 Excel 模板、导入 Excel 生成流程图、导出当前流程到 Excel |
 
-建议长期编辑时优先保存 `.diagramweave.json`，分享或打印时再导出 PNG/SVG/PDF。
+建议长期编辑时优先保存 `.diagramweave.json` 或 `.diagramweave.xlsx` 完整工作文件，分享或打印时再导出 PNG/SVG/PDF。普通 Excel 数据表适合人工批量编辑节点和连线，但不会完整保留画布样式和所有页面状态。
 
 ## 8. 模板
 

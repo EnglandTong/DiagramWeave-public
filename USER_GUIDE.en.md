@@ -132,12 +132,14 @@ Recommended workflow:
 |---|---|
 | Save project | Export a `.diagramweave.json` file with node positions, connections, pages, and layers |
 | Load project | Import a previously saved `.diagramweave.json` file |
+| Save full Excel project | Export a `.diagramweave.xlsx` file that fully preserves pages, layers, positions, styles, ports, and routing |
+| Load full Excel project | Restore a diagram from a `.diagramweave.xlsx` project file |
 | Export PNG | Generate an image for documents or chat |
 | Export SVG | Generate a vector file for Illustrator / Inkscape editing |
 | Export PDF | Generate a file for printing or archiving |
 | Excel template and import | Download an Excel template, import Excel into a diagram, or export the current diagram to Excel |
 
-For long-running work, save a `.diagramweave.json` project file first. Export PNG/SVG/PDF when you need to share or print.
+For long-running work, save a `.diagramweave.json` or `.diagramweave.xlsx` full project file first. Export PNG/SVG/PDF when you need to share or print. The regular Excel data table is useful for manually editing nodes and connections, but it does not preserve every canvas style or page state.
 
 ## 8. Templates
 
