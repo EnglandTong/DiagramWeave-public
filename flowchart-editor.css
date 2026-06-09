@@ -1589,6 +1589,22 @@
     min-width: 0;
   }
 
+  .presentation-mode .main-layout {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 70px;
+    bottom: 0;
+    height: auto;
+    overflow: hidden;
+  }
+
+  .presentation-mode .text-editor-panel {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+  }
+
   .presentation-mode .node {
     cursor: pointer;
   }

@@ -52,6 +52,7 @@ const projectSession = {
   name: DEFAULT_PROJECT_NAME,
   autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
   fileHandle: null,
+  fileFormat: 'json',
   autosaveTimer: null,
   saving: false,
   lastSavedAt: null,
@@ -4059,9 +4060,11 @@ async function hasProjectWritePermission(fileHandle) {
 }
 
 async function writeProjectFile(fileHandle) {
-  const payload = getFlowDocumentPayload();
+  const payload = projectSession.fileFormat === 'excel'
+    ? getProjectExcelArrayBuffer()
+    : JSON.stringify(getFlowDocumentPayload(), null, 2);
   const writable = await fileHandle.createWritable();
-  await writable.write(JSON.stringify(payload, null, 2));
+  await writable.write(payload);
   await writable.close();
   projectSession.lastSavedAt = new Date();
 }
@@ -4076,19 +4079,35 @@ function downloadProjectJson() {
   URL.revokeObjectURL(a.href);
 }
 
+function downloadProjectExcel() {
+  const blob = new Blob([getProjectExcelArrayBuffer()], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = getProjectFileBaseName() + '.diagramweave.xlsx';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function requestProjectSaveAs() {
   if (!fileSystemAccessSupported()) {
-    downloadProjectJson();
+    if (projectSession.fileFormat === 'excel') downloadProjectExcel();
+    else downloadProjectJson();
     showToast('浏览器不支持自动保存到原文件，已改为下载工作文件');
     return false;
   }
   const handle = await window.showSaveFilePicker({
-    suggestedName: getProjectFileBaseName() + '.diagramweave.json',
+    suggestedName: getProjectFileBaseName() + (projectSession.fileFormat === 'excel' ? '.diagramweave.xlsx' : '.diagramweave.json'),
     types: [{
-      description: 'DiagramWeave Project',
+      description: 'DiagramWeave JSON Project',
       accept: { 'application/json': ['.json'] },
+    }, {
+      description: 'DiagramWeave Excel Project',
+      accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
     }],
   });
+  projectSession.fileFormat = handle.name?.toLowerCase().endsWith('.xlsx') ? 'excel' : 'json';
   await writeProjectFile(handle);
   projectSession.fileHandle = handle;
   restartAutosaveTimer();
@@ -4128,13 +4147,21 @@ async function openProjectFileWithPicker() {
     types: [{
       description: 'DiagramWeave Project',
       accept: { 'application/json': ['.json'] },
+    }, {
+      description: 'DiagramWeave Excel Project',
+      accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
     }],
   });
   const file = await handle.getFile();
-  const raw = JSON.parse(await file.text());
-  if (loadFlowDocumentPayload(raw)) {
+  const isExcel = file.name.toLowerCase().endsWith('.xlsx');
+  const raw = isExcel ? null : JSON.parse(await file.text());
+  const loaded = isExcel
+    ? loadProjectExcelArrayBuffer(await file.arrayBuffer())
+    : loadFlowDocumentPayload(raw);
+  if (loaded) {
     projectSession.fileHandle = handle;
-    if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
+    projectSession.fileFormat = isExcel ? 'excel' : 'json';
+    if (!isExcel && !raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
     updateProjectTitle();
     restartAutosaveTimer();
     showToast('已打开工作文件，自动保存已启用');
@@ -4150,6 +4177,7 @@ async function ensureProjectFileForAutosave() {
 
 function resetToBlankProject() {
   projectSession.fileHandle = null;
+  projectSession.fileFormat = 'json';
   projectSession.lastSavedAt = null;
   if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
   projectSession.autosaveTimer = null;
@@ -4288,6 +4316,21 @@ async function importJSON() {
 function handleFileLoad(e) {
   const file = e.target.files[0];
   if (!file) return;
+  if (file.name.toLowerCase().endsWith('.xlsx')) {
+    file.arrayBuffer()
+      .then(buffer => {
+        if (loadProjectExcelArrayBuffer(buffer)) {
+          projectSession.fileHandle = null;
+          projectSession.fileFormat = 'excel';
+          updateProjectTitle();
+          restartAutosaveTimer();
+          showToast('浏览器不支持原文件自动保存；请使用保存按钮下载更新后的工作文件');
+        }
+      })
+      .catch(() => showToast('Excel 工作文件解析失败'));
+    e.target.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
@@ -4295,6 +4338,7 @@ function handleFileLoad(e) {
       const loaded = loadFlowDocumentPayload(raw);
       if (loaded) {
         projectSession.fileHandle = null;
+        projectSession.fileFormat = 'json';
         if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
         updateProjectTitle();
         restartAutosaveTimer();
@@ -4490,6 +4534,10 @@ function enterPresentation() {
 
   state.selectedNodeId = null;
   state.selectedConnectionId = null;
+
+  const textPanel = document.getElementById('textEditorPanel');
+  textPanel?.classList.remove('open');
+  document.getElementById('btn-text-editor')?.classList.remove('active');
 
   document.body.classList.add('presentation-mode');
 
@@ -5215,6 +5263,12 @@ function exportProjectToExcel() {
     showToast('Excel 库未加载，请确认 vendor 目录完整');
     return;
   }
+  const wb = buildProjectExcelWorkbook();
+  XLSX.writeFile(wb, getExportBaseName() + '.diagramweave.xlsx');
+  showToast('已保存完整 Excel 工作文件');
+}
+
+function buildProjectExcelWorkbook() {
   const payload = getFlowDocumentPayload();
   const json = JSON.stringify(payload, null, 2);
   const chunkSize = 30000;
@@ -5243,9 +5297,13 @@ function exportProjectToExcel() {
   XLSX.utils.book_append_sheet(wb, dataSheet, '_DiagramWeaveJSON');
   wb.Workbook = wb.Workbook || {};
   wb.Workbook.Sheets = [{ Hidden: 0 }, { Hidden: 1 }];
+  return wb;
+}
 
-  XLSX.writeFile(wb, getExportBaseName() + '.diagramweave.xlsx');
-  showToast('已保存完整 Excel 工作文件');
+function getProjectExcelArrayBuffer() {
+  if (typeof XLSX === 'undefined') throw new Error('Excel 库未加载，请确认 vendor 目录完整');
+  const wb = buildProjectExcelWorkbook();
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
 
 function buildExcelWorkbook(data, filename) {
@@ -5376,32 +5434,43 @@ function processProjectExcelFile(file) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
-      const workbook = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
-      const sheetName = workbook.SheetNames.find(n => n === '_DiagramWeaveJSON' || n === 'DiagramWeaveJSON');
-      if (!sheetName) {
-        showToast('未找到完整工作文件数据，请使用“上传并导入”读取普通 Excel 数据表');
-        return;
+      if (loadProjectExcelArrayBuffer(ev.target.result)) {
+        projectSession.fileHandle = null;
+        projectSession.fileFormat = 'excel';
+        hideExcelDataDialog();
       }
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, blankrows: false });
-      const map = new Map(rows.map(row => [String(row[0] || ''), String(row[1] || '')]));
-      if (map.get('format') !== 'DiagramWeaveProjectExcel') {
-        showToast('Excel 工作文件格式无效');
-        return;
-      }
-      const chunkCount = Math.max(0, parseInt(map.get('chunkCount') || '0', 10));
-      let json = '';
-      for (let i = 1; i <= chunkCount; i++) json += map.get(`chunk${i}`) || '';
-      if (!json) {
-        showToast('Excel 工作文件缺少图形数据');
-        return;
-      }
-      const raw = JSON.parse(json);
-      if (loadFlowDocumentPayload(raw)) hideExcelDataDialog();
     } catch (err) {
       showToast('Excel 工作文件解析失败：' + err.message);
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+function loadProjectExcelArrayBuffer(arrayBuffer) {
+  if (typeof XLSX === 'undefined') {
+    showToast('Excel 库未加载，请确认 vendor 目录完整');
+    return false;
+  }
+  const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+  const sheetName = workbook.SheetNames.find(n => n === '_DiagramWeaveJSON' || n === 'DiagramWeaveJSON');
+  if (!sheetName) {
+    showToast('未找到完整工作文件数据，请使用“上传并导入”读取普通 Excel 数据表');
+    return false;
+  }
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, blankrows: false });
+  const map = new Map(rows.map(row => [String(row[0] || ''), String(row[1] || '')]));
+  if (map.get('format') !== 'DiagramWeaveProjectExcel') {
+    showToast('Excel 工作文件格式无效');
+    return false;
+  }
+  const chunkCount = Math.max(0, parseInt(map.get('chunkCount') || '0', 10));
+  let json = '';
+  for (let i = 1; i <= chunkCount; i++) json += map.get(`chunk${i}`) || '';
+  if (!json) {
+    showToast('Excel 工作文件缺少图形数据');
+    return false;
+  }
+  return loadFlowDocumentPayload(JSON.parse(json));
 }
 
 function handleExcelLoad(e) {
