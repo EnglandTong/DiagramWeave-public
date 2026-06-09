@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, createWriteStream, copyFileSync } from 'node:fs';
+import { mkdirSync, existsSync, createWriteStream, copyFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
@@ -10,6 +10,7 @@ const fontPath = join(fontDir, 'NotoSansSC-Regular.otf');
 
 const FONT_URL =
   'https://github.com/notofonts/noto-cjk/raw/main/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf';
+const DOWNLOAD_TIMEOUT_MS = 10000;
 
 const LOCAL_FALLBACKS = [
   'C:/Windows/Fonts/msyh.ttc',
@@ -18,10 +19,19 @@ const LOCAL_FALLBACKS = [
 ];
 
 async function download(url, dest) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-  mkdirSync(dirname(dest), { recursive: true });
-  await pipeline(Readable.fromWeb(res.body), createWriteStream(dest));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+  let completed = false;
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+    mkdirSync(dirname(dest), { recursive: true });
+    await pipeline(Readable.fromWeb(res.body), createWriteStream(dest));
+    completed = true;
+  } finally {
+    clearTimeout(timeout);
+    if (!completed && existsSync(dest)) rmSync(dest, { force: true });
+  }
 }
 
 function copyLocalFallback() {
@@ -37,13 +47,13 @@ function copyLocalFallback() {
 }
 
 if (!existsSync(fontPath)) {
-  console.log('Downloading Noto Sans SC for offline PDF...');
-  try {
-    await download(FONT_URL, fontPath);
-    console.log('Font saved to', fontPath);
-  } catch (err) {
-    console.warn('Font download failed:', err.message);
-    if (!copyLocalFallback()) {
+  if (!copyLocalFallback()) {
+    console.log('Downloading Noto Sans SC for offline PDF...');
+    try {
+      await download(FONT_URL, fontPath);
+      console.log('Font saved to', fontPath);
+    } catch (err) {
+      console.warn('Font download failed or timed out:', err.message);
       console.warn('No local font copied. PDF will use canvas + system fonts.');
     }
   }
