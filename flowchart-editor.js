@@ -3572,32 +3572,33 @@ function toggleTextEditorHelp() {
 }
 
 function collectFlowRowsFromTable() {
+  const getCellValue = (row, field) => row.querySelector(`[data-f="${field}"]`)?.value ?? '';
   const nodeRows = [];
   document.querySelectorAll('#flowNodeTableBody tr').forEach(tr => {
-    const refId = parseInt(tr.querySelector('[data-f="refId"]').value, 10);
+    const refId = parseInt(getCellValue(tr, 'refId'), 10);
     if (isNaN(refId)) return;
     nodeRows.push({
       refId,
-      label: tr.querySelector('[data-f="label"]').value.trim() || '未命名',
-      role: tr.querySelector('[data-f="role"]').value.trim(),
-      shape: tr.querySelector('[data-f="shape"]').value || 'rectangle',
-      detail: tr.querySelector('[data-f="detail"]').value.trim(),
-      duration: parseFloat(tr.querySelector('[data-f="duration"]').value) || 0,
-      lane: tr.querySelector('[data-f="lane"]').value !== '' ? parseInt(tr.querySelector('[data-f="lane"]').value, 10) || 0 : undefined,
-      layer: tr.querySelector('[data-f="layer"]').value !== '' ? parseInt(tr.querySelector('[data-f="layer"]').value, 10) || 0 : undefined,
-      targetPage: tr.querySelector('[data-f="targetPage"]').value.trim(),
+      label: getCellValue(tr, 'label').trim() || '未命名',
+      role: getCellValue(tr, 'role').trim(),
+      shape: getCellValue(tr, 'shape') || 'rectangle',
+      detail: getCellValue(tr, 'detail').trim(),
+      duration: parseFloat(getCellValue(tr, 'duration')) || 0,
+      lane: getCellValue(tr, 'lane') !== '' ? parseInt(getCellValue(tr, 'lane'), 10) || 0 : undefined,
+      layer: getCellValue(tr, 'layer') !== '' ? parseInt(getCellValue(tr, 'layer'), 10) || 0 : undefined,
+      targetPage: getCellValue(tr, 'targetPage').trim(),
     });
   });
 
   const connRows = [];
   document.querySelectorAll('#flowConnTableBody tr').forEach(tr => {
-    const from = parseInt(tr.querySelector('[data-f="from"]').value, 10);
-    const to = parseInt(tr.querySelector('[data-f="to"]').value, 10);
+    const from = parseInt(getCellValue(tr, 'from'), 10);
+    const to = parseInt(getCellValue(tr, 'to'), 10);
     if (isNaN(from) || isNaN(to)) return;
     connRows.push({
       from,
       to,
-      label: tr.querySelector('[data-f="label"]').value.trim(),
+      label: getCellValue(tr, 'label').trim(),
     });
   });
 
