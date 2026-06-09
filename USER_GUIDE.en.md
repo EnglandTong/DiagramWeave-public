@@ -133,8 +133,8 @@ Recommended workflow:
 |---|---|
 | Save project | Export a `.diagramweave.json` file with node positions, connections, pages, and layers |
 | Load project | Import a previously saved `.diagramweave.json` file |
-| Save full Excel project | Export a `.diagramweave.xlsx` file that fully preserves pages, layers, positions, styles, ports, and routing |
-| Load full Excel project | Restore a diagram from a `.diagramweave.xlsx` project file |
+| Save full Excel project | Export an editable `.diagramweave.xlsx` workbook with Project, Pages, Layers, Nodes, and Connections sheets |
+| Load full Excel project | Restore from a `.diagramweave.xlsx` workbook; legacy hidden-JSON workbooks are still supported |
 | New Project | Start a blank project; the app asks whether to save the current project before switching |
 | Settings | Change Project Name and the auto-save interval, which defaults to every 30 seconds |
 | Export PNG | Generate an image for documents or chat |
@@ -142,11 +142,11 @@ Recommended workflow:
 | Export PDF | Generate a file for printing or archiving |
 | Excel template and import | Download an Excel template, import Excel into a diagram, or export the current diagram to Excel |
 
-For a brand-new project, the app first asks you to save a new file. After that, it automatically writes updates to the same `.diagramweave.json` file at the configured interval. When you open an existing JSON project file, supported browsers can auto-save directly back to that file.
+For a brand-new project, the app first asks you to save a new file. After that, it automatically writes updates to the same `.diagramweave.json` or `.diagramweave.xlsx` file at the configured interval. When you open an existing JSON / Excel project file, supported browsers can auto-save directly back to that file.
 
 Auto-save requires a browser with file system permissions, such as Edge or Chrome, and is intended for the local address opened by the start BAT. If the browser does not support that permission, manual save still works by downloading a file.
 
-For long-running work, save a `.diagramweave.json` or `.diagramweave.xlsx` full project file first. Export PNG/SVG/PDF when you need to share or print. The regular Excel data table is useful for manually editing nodes and connections, but it does not preserve every canvas style or page state.
+For long-running work, save a `.diagramweave.json` or `.diagramweave.xlsx` full project file first. Export PNG/SVG/PDF when you need to share or print. The full Excel project is for users who want to edit project data directly in Excel; the regular Excel data table is only a lightweight current-flow node/connection table.
 
 ## 8. Templates
 

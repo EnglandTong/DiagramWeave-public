@@ -53,6 +53,7 @@ const projectSession = {
   autosaveSeconds: DEFAULT_AUTOSAVE_SECONDS,
   fileHandle: null,
   fileFormat: 'json',
+  lastExcelLoadKind: null,
   autosaveTimer: null,
   saving: false,
   lastSavedAt: null,
@@ -608,10 +609,17 @@ function showConfirm(title, msg, onOk, onCancel, options = {}) {
     cancelBtn.textContent = '取消';
   };
 
-  okBtn.onclick = () => { cleanup(); if (onOk) onOk(); };
-  cancelBtn.onclick = () => { cleanup(); if (onCancel) onCancel(); };
+  const runAction = (fn) => {
+    if (!fn) return;
+    Promise.resolve(fn()).catch(err => {
+      if (err?.name !== 'AbortError') showToast('操作失败：' + (err?.message || err));
+    });
+  };
+
+  okBtn.onclick = () => { cleanup(); runAction(onOk); };
+  cancelBtn.onclick = () => { cleanup(); runAction(onCancel); };
   if (altBtn && options.altText) {
-    altBtn.onclick = () => { cleanup(); if (options.onAlt) options.onAlt(); };
+    altBtn.onclick = () => { cleanup(); runAction(options.onAlt); };
   }
 }
 
@@ -4059,11 +4067,21 @@ async function hasProjectWritePermission(fileHandle) {
   }
 }
 
+function isStaleFileHandleError(err) {
+  return err?.name === 'InvalidStateError'
+    || String(err?.message || '').includes('state had changed since it was read from disk');
+}
+
+function pauseAutosave() {
+  if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
+  projectSession.autosaveTimer = null;
+}
+
 async function writeProjectFile(fileHandle) {
   const payload = projectSession.fileFormat === 'excel'
     ? getProjectExcelArrayBuffer()
     : JSON.stringify(getFlowDocumentPayload(), null, 2);
-  const writable = await fileHandle.createWritable();
+  const writable = await fileHandle.createWritable({ keepExistingData: false });
   await writable.write(payload);
   await writable.close();
   projectSession.lastSavedAt = new Date();
@@ -4125,8 +4143,7 @@ async function saveProjectFile(options = {}) {
       return ok;
     }
     if (options.autosave && !(await hasProjectWritePermission(projectSession.fileHandle))) {
-      if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
-      projectSession.autosaveTimer = null;
+      pauseAutosave();
       showToast('自动保存已暂停：浏览器没有文件写入权限，请手动保存一次后再继续');
       return false;
     }
@@ -4134,6 +4151,23 @@ async function saveProjectFile(options = {}) {
     if (!options.autosave) showToast('已保存工作文件');
     return true;
   } catch (err) {
+    if (isStaleFileHandleError(err)) {
+      const format = projectSession.fileFormat;
+      projectSession.fileHandle = null;
+      pauseAutosave();
+      if (options.autosave) {
+        showToast('自动保存已暂停：档案可能被 OneDrive 或其他程序更新，请手动保存一次重新绑定档案');
+        return false;
+      }
+      projectSession.fileFormat = format;
+      showToast('原档案状态已变化，请重新选择保存位置');
+      try {
+        return await requestProjectSaveAs();
+      } catch (retryErr) {
+        if (retryErr?.name !== 'AbortError') showToast('重新保存失败：' + retryErr.message);
+        return false;
+      }
+    }
     if (err?.name !== 'AbortError') showToast((options.autosave ? '自动保存失败：' : '保存失败：') + err.message);
     return false;
   } finally {
@@ -4159,6 +4193,14 @@ async function openProjectFileWithPicker() {
     ? loadProjectExcelArrayBuffer(await file.arrayBuffer())
     : loadFlowDocumentPayload(raw);
   if (loaded) {
+    if (isExcel && projectSession.lastExcelLoadKind === 'data') {
+      projectSession.fileHandle = null;
+      projectSession.fileFormat = 'json';
+      updateProjectTitle();
+      restartAutosaveTimer();
+      showToast('已导入 Excel 数据表；请保存为新的工作档案以启用自动保存');
+      return;
+    }
     projectSession.fileHandle = handle;
     projectSession.fileFormat = isExcel ? 'excel' : 'json';
     if (!isExcel && !raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
@@ -5289,33 +5331,138 @@ function exportProjectToExcel() {
 
 function buildProjectExcelWorkbook() {
   const payload = getFlowDocumentPayload();
-  const json = JSON.stringify(payload, null, 2);
-  const chunkSize = 30000;
-  const chunks = [];
-  for (let i = 0; i < json.length; i += chunkSize) chunks.push(json.slice(i, i + chunkSize));
-
   const wb = XLSX.utils.book_new();
-  const summaryRows = [
-    ['DiagramWeave 完整工作文件'],
-    ['说明', '此 Excel 可作为 JSON 之外的完整备份格式。请用 DiagramWeave 的“加载完整工作文件 Excel”恢复。'],
-    ['保存时间', new Date().toISOString()],
-    ['页面/节点/连线等完整数据保存在隐藏工作表 _DiagramWeaveJSON 中。'],
-  ];
-  const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
-  summarySheet['!cols'] = [{ wch: 18 }, { wch: 86 }];
-  XLSX.utils.book_append_sheet(wb, summarySheet, '说明');
 
-  const dataRows = [
-    ['format', 'DiagramWeaveProjectExcel'],
-    ['version', '1'],
-    ['chunkCount', String(chunks.length)],
-    ...chunks.map((chunk, index) => [`chunk${index + 1}`, chunk]),
+  const pages = payload.version === 2 && Array.isArray(payload.pages)
+    ? payload.pages
+    : [{
+      id: 'page_1',
+      name: 'Page 1',
+      nodes: payload.nodes || [],
+      connections: payload.connections || [],
+      layers: [{ id: 0, name: '图层 1', visible: true, locked: false }],
+      nextLayerId: 1,
+    }];
+
+  const projectRows = [{
+    '格式': 'DiagramWeaveEditableExcel',
+    '格式版本': 1,
+    'Project Name': payload.projectName || projectSession.name,
+    '自动保存秒': payload.autosaveSeconds || projectSession.autosaveSeconds,
+    '当前页面ID': payload.currentPageId || pages[0]?.id || 'page_1',
+    '下一个页面ID': payload.nextPageId || pages.length + 1,
+    '下一个对象ID': payload.nextId || state.nextId || 1,
+    '连线模式': payload.connRouteMode || state.connRouteMode || 'bezier',
+    '保存时间': new Date().toISOString(),
+  }];
+  const projectSheet = XLSX.utils.json_to_sheet(projectRows);
+  projectSheet['!cols'] = [
+    { wch: 24 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 18 },
+    { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 },
   ];
-  const dataSheet = XLSX.utils.aoa_to_sheet(dataRows);
-  dataSheet['!cols'] = [{ wch: 14 }, { wch: 100 }];
-  XLSX.utils.book_append_sheet(wb, dataSheet, '_DiagramWeaveJSON');
-  wb.Workbook = wb.Workbook || {};
-  wb.Workbook.Sheets = [{ Hidden: 0 }, { Hidden: 1 }];
+  XLSX.utils.book_append_sheet(wb, projectSheet, '项目');
+
+  const pageRows = pages.map((page, index) => ({
+    '页面ID': page.id,
+    '页面名称': page.name || `Page ${index + 1}`,
+    '顺序': index + 1,
+    '当前页面': page.id === payload.currentPageId ? '是' : '',
+  }));
+  const pageSheet = XLSX.utils.json_to_sheet(pageRows);
+  pageSheet['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 8 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, pageSheet, '页面');
+
+  const layerRows = [];
+  pages.forEach(page => {
+    const layers = Array.isArray(page.layers) && page.layers.length
+      ? page.layers
+      : [{ id: 0, name: '图层 1', visible: true, locked: false }];
+    layers.forEach(layer => {
+      layerRows.push({
+        '页面ID': page.id,
+        '图层ID': layer.id,
+        '图层名称': layer.name || `图层 ${layer.id + 1}`,
+        '可见': layer.visible === false ? '否' : '是',
+        '锁定': layer.locked ? '是' : '否',
+      });
+    });
+  });
+  const layerSheet = XLSX.utils.json_to_sheet(layerRows);
+  layerSheet['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 20 }, { wch: 8 }, { wch: 8 }];
+  XLSX.utils.book_append_sheet(wb, layerSheet, '图层');
+
+  const nodeRows = [];
+  pages.forEach(page => {
+    (page.nodes || []).forEach(node => {
+      nodeRows.push({
+        '页面ID': page.id,
+        '节点ID': node.id,
+        '编号': node.refId,
+        '简介': node.label || '',
+        '角色': node.role || '',
+        '形状': node.shape || 'rectangle',
+        'X': node.x,
+        'Y': node.y,
+        '宽': node.w,
+        '高': node.h,
+        '填充色': node.fillColor || '',
+        '线条色': node.strokeColor || '',
+        '详细说明': node.detail || '',
+        '耗时天': node.duration || 0,
+        '泳道': node.lane ?? '',
+        '图层ID': node.layer ?? 0,
+        '目标页ID': node.targetPageId || '',
+      });
+    });
+  });
+  const nodeSheet = XLSX.utils.json_to_sheet(nodeRows);
+  nodeSheet['!cols'] = [
+    { wch: 18 }, { wch: 18 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
+    { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 10 },
+    { wch: 34 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 18 },
+  ];
+  XLSX.utils.book_append_sheet(wb, nodeSheet, '节点');
+
+  const connRows = [];
+  pages.forEach(page => {
+    const refByNodeId = new Map((page.nodes || []).map(n => [n.id, n.refId]));
+    (page.connections || []).forEach(conn => {
+      connRows.push({
+        '页面ID': page.id,
+        '连线ID': conn.id,
+        '起点节点ID': conn.from,
+        '起点编号': refByNodeId.get(conn.from) ?? '',
+        '起点端口': conn.fromPort || 'bottom',
+        '终点节点ID': conn.to,
+        '终点编号': refByNodeId.get(conn.to) ?? '',
+        '终点端口': conn.toPort || 'top',
+        '条件': conn.label || '',
+        '标签位置': conn.labelPos ?? '',
+      });
+    });
+  });
+  const connSheet = XLSX.utils.json_to_sheet(connRows);
+  connSheet['!cols'] = [
+    { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 10 }, { wch: 10 },
+    { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
+  ];
+  XLSX.utils.book_append_sheet(wb, connSheet, '连线');
+
+  const helpRows = [
+    { '工作表': '项目', '说明': '项目级设置。格式字段请勿修改。Project Name 和自动保存秒可以修改。' },
+    { '工作表': '页面', '说明': '每一页一行。页面ID 被节点、图层、连线引用。' },
+    { '工作表': '图层', '说明': '页面内图层。可见/锁定可填 是/否、true/false、1/0。' },
+    { '工作表': '节点', '说明': '可直接修改编号、简介、角色、形状、位置、颜色、说明、图层和目标页。节点ID 建议不要修改。' },
+    { '工作表': '连线', '说明': '可用起点/终点节点ID 或起点/终点编号连接节点。端口可填 top/bottom/left/right。' },
+    { '工作表': '形状代码', '说明': '下方列出当前支持的形状代码。' },
+  ];
+  Object.keys(shapeDefaults).sort().forEach(key => {
+    helpRows.push({ '工作表': key, '说明': shapeNames[key] || key });
+  });
+  const helpSheet = XLSX.utils.json_to_sheet(helpRows);
+  helpSheet['!cols'] = [{ wch: 18 }, { wch: 72 }];
+  XLSX.utils.book_append_sheet(wb, helpSheet, '填写说明');
+
   return wb;
 }
 
@@ -5470,12 +5617,20 @@ function loadProjectExcelArrayBuffer(arrayBuffer) {
     showToast('Excel 库未加载，请确认 vendor 目录完整');
     return false;
   }
+  projectSession.lastExcelLoadKind = null;
   const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+  const projectSheetName = workbook.SheetNames.find(n => n === '项目');
+  if (projectSheetName) {
+    const loaded = loadEditableProjectExcelWorkbook(workbook);
+    if (loaded) projectSession.lastExcelLoadKind = 'project';
+    return loaded;
+  }
   const sheetName = workbook.SheetNames.find(n => n === '_DiagramWeaveJSON' || n === 'DiagramWeaveJSON');
   if (!sheetName) {
-    showToast('未找到完整工作文件数据，请使用“上传并导入”读取普通 Excel 数据表');
-    return false;
+    projectSession.lastExcelLoadKind = 'data';
+    return importExcelWorkbookData(workbook);
   }
+  projectSession.lastExcelLoadKind = 'project';
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, blankrows: false });
   const map = new Map(rows.map(row => [String(row[0] || ''), String(row[1] || '')]));
   if (map.get('format') !== 'DiagramWeaveProjectExcel') {
@@ -5490,6 +5645,140 @@ function loadProjectExcelArrayBuffer(arrayBuffer) {
     return false;
   }
   return loadFlowDocumentPayload(JSON.parse(json));
+}
+
+function parseExcelBool(value, fallback = false) {
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  const text = String(value ?? '').trim().toLowerCase();
+  if (['是', 'true', 'yes', 'y', '1'].includes(text)) return true;
+  if (['否', 'false', 'no', 'n', '0'].includes(text)) return false;
+  return fallback;
+}
+
+function parseExcelNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function getExcelSheetRows(workbook, names) {
+  const sheetName = names.find(name => workbook.Sheets[name]);
+  if (!sheetName) return [];
+  return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+}
+
+function loadEditableProjectExcelWorkbook(workbook) {
+  const projectRows = getExcelSheetRows(workbook, ['项目']);
+  const project = projectRows[0] || {};
+  if (project['格式'] && String(project['格式']).trim() !== 'DiagramWeaveEditableExcel') {
+    showToast('Excel 项目格式无效');
+    return false;
+  }
+
+  const pageRows = getExcelSheetRows(workbook, ['页面']);
+  const layerRows = getExcelSheetRows(workbook, ['图层']);
+  const nodeRows = getExcelSheetRows(workbook, ['节点', '节点表']);
+  const connRows = getExcelSheetRows(workbook, ['连线', '连线表']);
+
+  if (!nodeRows.length && !pageRows.length) {
+    showToast('Excel 项目缺少页面或节点数据');
+    return false;
+  }
+
+  const pages = (pageRows.length ? pageRows : [{ '页面ID': 'page_1', '页面名称': 'Page 1', '顺序': 1 }])
+    .sort((a, b) => parseExcelNumber(a['顺序'], 0) - parseExcelNumber(b['顺序'], 0))
+    .map((row, index) => ({
+      id: sanitizeExcelText(row['页面ID'] || `page_${index + 1}`, 80),
+      name: sanitizeExcelText(row['页面名称'] || `Page ${index + 1}`, 80),
+      nodes: [],
+      connections: [],
+      layers: [],
+      nextLayerId: 1,
+    }));
+
+  const pageById = new Map(pages.map(page => [page.id, page]));
+  const fallbackPage = pages[0];
+  layerRows.forEach((row, index) => {
+    const page = pageById.get(sanitizeExcelText(row['页面ID'], 80)) || fallbackPage;
+    page.layers.push({
+      id: parseExcelNumber(row['图层ID'], index),
+      name: sanitizeExcelText(row['图层名称'] || `图层 ${index + 1}`, 80),
+      visible: parseExcelBool(row['可见'], true),
+      locked: parseExcelBool(row['锁定'], false),
+    });
+  });
+  pages.forEach(page => {
+    if (!page.layers.length) page.layers.push({ id: 0, name: '图层 1', visible: true, locked: false });
+    page.nextLayerId = Math.max(...page.layers.map(layer => parseExcelNumber(layer.id, 0)), 0) + 1;
+  });
+
+  const nodeByPageAndId = new Map();
+  const nodeByPageAndRef = new Map();
+  nodeRows.forEach((row, index) => {
+    const pageId = sanitizeExcelText(row['页面ID'], 80) || fallbackPage.id;
+    const page = pageById.get(pageId) || fallbackPage;
+    const refId = parseExcelNumber(row['编号'], index + 1);
+    const nodeId = sanitizeExcelText(row['节点ID'] || `${page.id}_node_${refId}`, 80);
+    const node = {
+      id: nodeId,
+      refId,
+      shape: sanitizeExcelText(row['形状'] || 'rectangle', 64),
+      x: parseExcelNumber(row['X'], 100 + index * 30),
+      y: parseExcelNumber(row['Y'], 100 + index * 30),
+      w: parseExcelNumber(row['宽'], 140),
+      h: parseExcelNumber(row['高'], 60),
+      label: sanitizeExcelText(row['简介'] || '未命名', MAX_EXCEL_LABEL_LENGTH),
+      fillColor: sanitizeExcelText(row['填充色'] || getDefaultNodeFill(), 20),
+      strokeColor: sanitizeExcelText(row['线条色'] || getDefaultNodeStroke(), 20),
+      detail: sanitizeExcelText(row['详细说明'], MAX_EXCEL_DETAIL_LENGTH),
+      duration: parseExcelNumber(row['耗时天'], 0),
+      role: sanitizeExcelText(row['角色'], MAX_EXCEL_ROLE_LENGTH),
+      layer: parseExcelNumber(row['图层ID'], 0),
+      targetPageId: sanitizeExcelText(row['目标页ID'], 80) || null,
+    };
+    const lane = row['泳道'];
+    if (lane !== '') node.lane = parseExcelNumber(lane, 0);
+    page.nodes.push(node);
+    nodeByPageAndId.set(`${page.id}::${node.id}`, node);
+    nodeByPageAndRef.set(`${page.id}::${node.refId}`, node);
+  });
+
+  connRows.forEach((row, index) => {
+    const pageId = sanitizeExcelText(row['页面ID'], 80) || fallbackPage.id;
+    const page = pageById.get(pageId) || fallbackPage;
+    const fromId = sanitizeExcelText(row['起点节点ID'], 80);
+    const toId = sanitizeExcelText(row['终点节点ID'], 80);
+    const fromRef = parseExcelNumber(row['起点编号'], NaN);
+    const toRef = parseExcelNumber(row['终点编号'], NaN);
+    const fromNode = nodeByPageAndId.get(`${page.id}::${fromId}`) || nodeByPageAndRef.get(`${page.id}::${fromRef}`);
+    const toNode = nodeByPageAndId.get(`${page.id}::${toId}`) || nodeByPageAndRef.get(`${page.id}::${toRef}`);
+    if (!fromNode || !toNode) return;
+    const labelPos = row['标签位置'] === '' ? undefined : parseExcelNumber(row['标签位置'], undefined);
+    const conn = {
+      id: sanitizeExcelText(row['连线ID'] || `${page.id}_conn_${index + 1}`, 80),
+      from: fromNode.id,
+      fromPort: sanitizeExcelText(row['起点端口'] || 'bottom', 16),
+      to: toNode.id,
+      toPort: sanitizeExcelText(row['终点端口'] || 'top', 16),
+      label: sanitizeExcelText(row['条件'], MAX_EXCEL_LABEL_LENGTH),
+    };
+    if (labelPos !== undefined) conn.labelPos = labelPos;
+    page.connections.push(conn);
+  });
+
+  const currentPageId = sanitizeExcelText(project['当前页面ID'], 80);
+  const doc = {
+    version: 2,
+    projectName: sanitizeExcelText(project['Project Name'] || projectSession.name, 80),
+    autosaveSeconds: parseExcelNumber(project['自动保存秒'], DEFAULT_AUTOSAVE_SECONDS),
+    pages,
+    currentPageId: pageById.has(currentPageId) ? currentPageId : pages[0].id,
+    nextPageId: parseExcelNumber(project['下一个页面ID'], pages.length + 1),
+    nextId: parseExcelNumber(project['下一个对象ID'], 1),
+    connRouteMode: sanitizeExcelText(project['连线模式'] || state.connRouteMode, 32),
+  };
+
+  return loadFlowDocumentPayload(doc);
 }
 
 function handleExcelLoad(e) {
@@ -5516,70 +5805,73 @@ function processExcelFile(file) {
     try {
       const data = new Uint8Array(ev.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
-
-      const nodeSheetName = workbook.SheetNames.find(n => n.includes('节点')) || workbook.SheetNames[0];
-      const connSheetName = workbook.SheetNames.find(n => n.includes('连线')) || workbook.SheetNames[1];
-      const nodeData = XLSX.utils.sheet_to_json(workbook.Sheets[nodeSheetName]);
-      const connData = connSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[connSheetName]) : [];
-
-      if (nodeData.length === 0) {
-        showToast('Excel 中没有找到节点数据');
-        return;
-      }
-      if (nodeData.length > MAX_EXCEL_NODE_ROWS) {
-        showToast(`Excel 节点超限，最多允许 ${MAX_EXCEL_NODE_ROWS} 行`);
-        return;
-      }
-      if (connData.length > MAX_EXCEL_CONN_ROWS) {
-        showToast(`Excel 连线超限，最多允许 ${MAX_EXCEL_CONN_ROWS} 行`);
-        return;
-      }
-
-      const nodeRows = [];
-
-      nodeData.forEach(row => {
-        const parsed = parseExcelNodeRow(row);
-        if (parsed.id === '' || parsed.id === undefined || parsed.id === null) return;
-        const refId = parseInt(parsed.id, 10);
-        if (isNaN(refId)) return;
-        nodeRows.push({
-          refId,
-          label: parsed.label,
-          role: parsed.role,
-          shape: parsed.shape,
-          detail: parsed.detail,
-          duration: parsed.duration,
-          lane: parsed.lane,
-          layer: parsed.layer,
-          targetPage: parsed.targetPage,
-        });
-      });
-
-      const connRows = [];
-      connData.forEach(row => {
-        const from = parseInt(pickExcelField(row, ['起点编号', 'from', '起始', 'source']), 10);
-        const to = parseInt(pickExcelField(row, ['终点编号', 'to', '目标', 'target']), 10);
-        if (isNaN(from) || isNaN(to)) return;
-        connRows.push({
-          from,
-          to,
-          label: sanitizeExcelText(pickExcelField(row, ['条件', 'label', '标签']) || '', MAX_EXCEL_LABEL_LENGTH),
-        });
-      });
-
-      if (nodeRows.length === 0) {
-        showToast('未解析到有效节点行，请检查「编号」列');
-        return;
-      }
-
-      applyFlowData(nodeRows, connRows, false);
-      hideExcelDataDialog();
-      showToast(`已从 Excel 导入 ${state.nodes.length} 个节点，${state.connections.length} 条连线`);
+      importExcelWorkbookData(workbook);
     } catch (err) {
       showToast('Excel 解析失败：' + err.message);
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+function importExcelWorkbookData(workbook) {
+  const nodeSheetName = workbook.SheetNames.find(n => n.includes('节点')) || workbook.SheetNames[0];
+  const connSheetName = workbook.SheetNames.find(n => n.includes('连线')) || workbook.SheetNames[1];
+  const nodeData = XLSX.utils.sheet_to_json(workbook.Sheets[nodeSheetName]);
+  const connData = connSheetName ? XLSX.utils.sheet_to_json(workbook.Sheets[connSheetName]) : [];
+
+  if (nodeData.length === 0) {
+    showToast('Excel 中没有找到节点数据');
+    return false;
+  }
+  if (nodeData.length > MAX_EXCEL_NODE_ROWS) {
+    showToast(`Excel 节点超限，最多允许 ${MAX_EXCEL_NODE_ROWS} 行`);
+    return false;
+  }
+  if (connData.length > MAX_EXCEL_CONN_ROWS) {
+    showToast(`Excel 连线超限，最多允许 ${MAX_EXCEL_CONN_ROWS} 行`);
+    return false;
+  }
+
+  const nodeRows = [];
+  nodeData.forEach(row => {
+    const parsed = parseExcelNodeRow(row);
+    if (parsed.id === '' || parsed.id === undefined || parsed.id === null) return;
+    const refId = parseInt(parsed.id, 10);
+    if (isNaN(refId)) return;
+    nodeRows.push({
+      refId,
+      label: parsed.label,
+      role: parsed.role,
+      shape: parsed.shape,
+      detail: parsed.detail,
+      duration: parsed.duration,
+      lane: parsed.lane,
+      layer: parsed.layer,
+      targetPage: parsed.targetPage,
+    });
+  });
+
+  const connRows = [];
+  connData.forEach(row => {
+    const from = parseInt(pickExcelField(row, ['起点编号', 'from', '起始', 'source']), 10);
+    const to = parseInt(pickExcelField(row, ['终点编号', 'to', '目标', 'target']), 10);
+    if (isNaN(from) || isNaN(to)) return;
+    connRows.push({
+      from,
+      to,
+      label: sanitizeExcelText(pickExcelField(row, ['条件', 'label', '标签']) || '', MAX_EXCEL_LABEL_LENGTH),
+    });
+  });
+
+  if (nodeRows.length === 0) {
+    showToast('未解析到有效节点行，请检查「编号」列');
+    return false;
+  }
+
+  applyFlowData(nodeRows, connRows, false);
+  hideExcelDataDialog();
+  showToast(`已从 Excel 数据表导入 ${state.nodes.length} 个节点，${state.connections.length} 条连线`);
+  return true;
 }
 
 // ===== 设置与更新 =====

@@ -133,8 +133,8 @@ pnpm serve
 |---|---|
 | 保存工作文件 | 导出 `.diagramweave.json`，保留节点位置、连线、页面和图层 |
 | 加载工作文件 | 导入之前保存的 `.diagramweave.json` |
-| 保存完整工作文件 Excel | 导出 `.diagramweave.xlsx`，像 JSON 一样完整保留页面、图层、位置、样式、连接点和连线路由 |
-| 加载完整工作文件 Excel | 从 `.diagramweave.xlsx` 完整恢复图形 |
+| 保存完整工作文件 Excel | 导出可直接编辑的 `.diagramweave.xlsx`，包含项目、页面、图层、节点、连线等工作表 |
+| 加载完整工作文件 Excel | 从 `.diagramweave.xlsx` 恢复图形；也兼容旧版隐藏 JSON 工作簿 |
 | 新项目 | 开始一个空白项目；切换前会询问是否先保存当前项目 |
 | 设置 | 修改 Project Name 和自动保存间隔，默认每 30 秒自动保存一次 |
 | 导出 PNG | 生成图片，适合放入文档或聊天 |
@@ -142,11 +142,11 @@ pnpm serve
 | 导出 PDF | 生成适合打印或归档的文件 |
 | Excel 模板与导入 | 下载 Excel 模板、导入 Excel 生成流程图、导出当前流程到 Excel |
 
-如果是全新项目，系统会先提示保存新档案；保存后会按设置的间隔自动更新到同一个 `.diagramweave.json` 文件。打开旧的 JSON 工作文件时，在支持文件权限的浏览器中会直接自动保存回原文件。
+如果是全新项目，系统会先提示保存新档案；保存后会按设置的间隔自动更新到同一个 `.diagramweave.json` 或 `.diagramweave.xlsx` 文件。打开旧的 JSON / Excel 工作文件时，在支持文件权限的浏览器中会直接自动保存回原文件。
 
 自动保存需要 Edge / Chrome 等支持文件系统权限的浏览器，并建议通过启动 BAT 打开的本机地址使用。如果浏览器不支持该权限，仍可手动保存，系统会改用下载文件的方式。
 
-建议长期编辑时优先保存 `.diagramweave.json` 或 `.diagramweave.xlsx` 完整工作文件，分享或打印时再导出 PNG/SVG/PDF。普通 Excel 数据表适合人工批量编辑节点和连线，但不会完整保留画布样式和所有页面状态。
+建议长期编辑时优先保存 `.diagramweave.json` 或 `.diagramweave.xlsx` 完整工作文件，分享或打印时再导出 PNG/SVG/PDF。完整 Excel 工作文件适合需要在 Excel 里直接修改项目资料的用户；普通 Excel 数据表只适合快速批量编辑当前流程的节点和连线。
 
 ## 8. 模板
 
