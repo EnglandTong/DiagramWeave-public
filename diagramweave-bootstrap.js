@@ -53,7 +53,10 @@
 
   function getEffectiveGithubRepo() {
     const override = normalizeGithubRepo(readSetting(SETTINGS_KEYS.githubRepo));
-    if (override) return override;
+    if (override) {
+      if (override.toLowerCase() === 'englandtong/diagramweave') return 'EnglandTong/DiagramWeave-public';
+      return override;
+    }
     return normalizeGithubRepo(manifest?.githubRepo || '');
   }
 

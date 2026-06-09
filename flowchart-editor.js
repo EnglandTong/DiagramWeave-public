@@ -4189,7 +4189,26 @@ function resetToBlankProject() {
   state.selectedConnectionId = null;
   state.undoStack = [];
   state.redoStack = [];
-  if (typeof DiagramWeave !== 'undefined') DiagramWeave.initDocument();
+  const blankPage = {
+    id: 'page_1',
+    name: 'Page 1',
+    nodes: [],
+    connections: [],
+    layers: [{ id: 0, name: '图层 1', visible: true, locked: false }],
+    nextLayerId: 1,
+  };
+  if (typeof DiagramWeave !== 'undefined') {
+    DiagramWeave.loadDocument({
+      version: 2,
+      pages: [blankPage],
+      currentPageId: blankPage.id,
+      nextPageId: 2,
+      nextId: 1,
+      connRouteMode: state.connRouteMode,
+    });
+  }
+  document.getElementById('textEditorPanel')?.classList.remove('open');
+  document.getElementById('btn-text-editor')?.classList.remove('active');
   clearCanvasNodes();
   renderAll();
   updateProjectTitle();
