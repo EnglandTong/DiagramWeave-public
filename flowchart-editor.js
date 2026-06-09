@@ -4048,6 +4048,16 @@ function restartAutosaveTimer() {
   }, projectSession.autosaveSeconds * 1000);
 }
 
+async function hasProjectWritePermission(fileHandle) {
+  if (!fileHandle) return false;
+  if (typeof fileHandle.queryPermission !== 'function') return true;
+  try {
+    return await fileHandle.queryPermission({ mode: 'readwrite' }) === 'granted';
+  } catch {
+    return false;
+  }
+}
+
 async function writeProjectFile(fileHandle) {
   const payload = getFlowDocumentPayload();
   const writable = await fileHandle.createWritable();
@@ -4094,6 +4104,12 @@ async function saveProjectFile(options = {}) {
       const ok = await requestProjectSaveAs();
       if (ok) showToast('已保存工作文件，自动保存已启用');
       return ok;
+    }
+    if (options.autosave && !(await hasProjectWritePermission(projectSession.fileHandle))) {
+      if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
+      projectSession.autosaveTimer = null;
+      showToast('自动保存已暂停：浏览器没有文件写入权限，请手动保存一次后再继续');
+      return false;
     }
     await writeProjectFile(projectSession.fileHandle);
     if (!options.autosave) showToast('已保存工作文件');
