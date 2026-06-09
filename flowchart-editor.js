@@ -579,7 +579,7 @@ function applyTemplate(index) {
 }
 
 // ===== 确认对话框 =====
-function showConfirm(title, msg, onOk, onCancel) {
+function showConfirm(title, msg, onOk, onCancel, options = {}) {
   const overlay = document.getElementById('confirmOverlay');
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmMsg').textContent = msg;
@@ -587,15 +587,31 @@ function showConfirm(title, msg, onOk, onCancel) {
 
   const okBtn = document.getElementById('confirmOk');
   const cancelBtn = document.getElementById('confirmCancel');
+  const altBtn = document.getElementById('confirmAlt');
+  okBtn.textContent = options.okText || '确认';
+  cancelBtn.textContent = options.cancelText || '取消';
+  if (altBtn) {
+    altBtn.textContent = options.altText || '';
+    altBtn.style.display = options.altText ? '' : 'none';
+  }
 
   const cleanup = () => {
     overlay.classList.remove('visible');
     okBtn.onclick = null;
     cancelBtn.onclick = null;
+    if (altBtn) {
+      altBtn.onclick = null;
+      altBtn.style.display = 'none';
+    }
+    okBtn.textContent = '确认';
+    cancelBtn.textContent = '取消';
   };
 
   okBtn.onclick = () => { cleanup(); if (onOk) onOk(); };
   cancelBtn.onclick = () => { cleanup(); if (onCancel) onCancel(); };
+  if (altBtn && options.altText) {
+    altBtn.onclick = () => { cleanup(); if (options.onAlt) options.onAlt(); };
+  }
 }
 
 function hideConfirm() {
@@ -603,8 +619,15 @@ function hideConfirm() {
   overlay.classList.remove('visible');
   const okBtn = document.getElementById('confirmOk');
   const cancelBtn = document.getElementById('confirmCancel');
+  const altBtn = document.getElementById('confirmAlt');
   okBtn.onclick = null;
   cancelBtn.onclick = null;
+  if (altBtn) {
+    altBtn.onclick = null;
+    altBtn.style.display = 'none';
+  }
+  okBtn.textContent = '确认';
+  cancelBtn.textContent = '取消';
 }
 
 // ===== 自动布局弹窗 =====
@@ -4152,10 +4175,19 @@ function promptInitialProjectSave() {
   if (projectSession.fileHandle || sessionStorage.getItem('dw-initial-save-prompted')) return;
   sessionStorage.setItem('dw-initial-save-prompted', '1');
   showConfirm(
-    '新项目',
-    '这是一个新项目。是否先保存新档案以启用自动保存？',
+    '开始项目',
+    '请选择保存新档案、打开旧档案，或暂不处理。',
     async () => {
       await ensureProjectFileForAutosave();
+    },
+    null,
+    {
+      okText: '保存新档案',
+      cancelText: '暂不处理',
+      altText: '打开旧档案',
+      onAlt: async () => {
+        await importJSON();
+      },
     },
   );
 }
