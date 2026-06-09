@@ -4052,7 +4052,7 @@ async function requestProjectSaveAs() {
     suggestedName: getProjectFileBaseName() + '.diagramweave.json',
     types: [{
       description: 'DiagramWeave Project',
-      accept: { 'application/json': ['.diagramweave.json', '.json'] },
+      accept: { 'application/json': ['.json'] },
     }],
   });
   await writeProjectFile(handle);
@@ -4087,7 +4087,7 @@ async function openProjectFileWithPicker() {
     multiple: false,
     types: [{
       description: 'DiagramWeave Project',
-      accept: { 'application/json': ['.diagramweave.json', '.json'] },
+      accept: { 'application/json': ['.json'] },
     }],
   });
   const file = await handle.getFile();
