@@ -22,7 +22,7 @@ const state = {
   dragOffset: { x: 0, y: 0 },
   panStart: { x: 0, y: 0 },
   spacePressed: false,
-  connRouteMode: 'bezier', // bezier | orthogonal | avoidance | straight | visio
+  connRouteMode: 'visio', // bezier | orthogonal | avoidance | straight | visio
 };
 
 const CONN_ROUTE_LABELS = {
@@ -54,10 +54,13 @@ const projectSession = {
   fileHandle: null,
   fileFormat: 'json',
   lastExcelLoadKind: null,
+  lastExcelImportDiagnostics: null,
   autosaveTimer: null,
   saving: false,
   lastSavedAt: null,
 };
+
+const NATIVE_VISIO_EXT_RE = /\.(vsdx|vsd|vsdm|vdx)$/i;
 
 // ===== 演示模式状态 =====
 const presentState = {
@@ -418,6 +421,7 @@ function runExport(format) {
   if (format === 'png') exportPNG();
   else if (format === 'svg') exportSVG();
   else if (format === 'pdf') exportPDF();
+  else if (format === 'vso') downloadProjectVso();
 }
 
 // ===== 流程图模板库 =====
@@ -480,14 +484,17 @@ function initTemplates() {
   allTemplates.forEach((tmpl, idx) => {
     const el = document.createElement('div');
     el.className = 'template-dialog-item';
+    const isEn = typeof DiagramWeaveI18n !== 'undefined' && DiagramWeaveI18n.getLocale() === 'en';
+    const tmplName = (isEn && tmpl.nameEn) ? tmpl.nameEn : tmpl.name;
+    const tmplDesc = (isEn && tmpl.descriptionEn) ? tmpl.descriptionEn : tmpl.description;
     // 泳道图显示特殊图标
     const icon = (tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v')
       ? (templateIconSVG.swimlane || templateIconSVG.rectangle)
       : (templateIconSVG[tmpl.nodes[0]?.shape] || templateIconSVG.rectangle);
     el.innerHTML = `
       <div class="template-dialog-item-icon">${icon}</div>
-      <div class="template-dialog-item-name">${escapeHtml(tmpl.name)}</div>
-      <div class="template-dialog-item-desc">${escapeHtml(tmpl.description)}</div>
+      <div class="template-dialog-item-name">${escapeHtml(tmplName)}</div>
+      <div class="template-dialog-item-desc">${escapeHtml(tmplDesc)}</div>
     `;
     el.addEventListener('click', () => onTemplateDialogClick(idx));
     grid.appendChild(el);
@@ -540,12 +547,19 @@ function applyTemplate(index) {
   const nodeRefs = [];
   tmpl.nodes.forEach((n, i) => {
     const defaults = shapeDefaults[n.shape] || { w: 140, h: 60 };
-    const node = createNode(n.shape, n.x || 0, n.y || 0, n.label);
+    const hasX = Number.isFinite(Number(n.x));
+    const hasY = Number.isFinite(Number(n.y));
+    const node = createNode(n.shape, hasX ? Number(n.x) : 0, hasY ? Number(n.y) : 0, n.label);
     node.w = n.w || defaults.w;
     node.h = n.h || defaults.h;
+    node.detail = n.detail || '';
+    node.duration = Number.isFinite(Number(n.duration)) ? Number(n.duration) : 0;
+    node.role = n.role || '';
+    node.fillColor = n.fillColor || node.fillColor;
+    node.strokeColor = n.strokeColor || node.strokeColor;
     // 保存泳道信息
-    if (tmpl.type === 'swimlane' && n.lane !== undefined) {
-      node.lane = n.lane;
+    if ((tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v') && n.lane !== undefined) {
+      node.lane = Math.max(0, parseInt(n.lane, 10) || 0);
     }
     state.nodes.push(node);
     nodeRefs.push(node);
@@ -559,22 +573,25 @@ function applyTemplate(index) {
     state.connections.push({
       id: 'conn_' + state.nextId++,
       from: fromNode.id,
-      fromPort: 'bottom',
+      fromPort: normalizePortName(c.fromPort, 'bottom'),
       to: toNode.id,
-      toPort: 'top',
+      toPort: normalizePortName(c.toPort, 'top'),
       label: c.label || '',
+      labelPos: c.labelPos,
     });
   });
 
-  // 自动布局
-  if ((tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v') && tmpl.swimlanes) {
-    autoLayoutSwimlane(tmpl.swimlanes, tmpl.type === 'swimlane-v' ? 'vertical' : 'horizontal');
-  } else {
-    runAutoLayout(tmpl.layout || 'vertical', 'normal');
-  }
+  const hasExplicitLayout = tmpl.preserveLayout === true ||
+    tmpl.nodes.some(n => Number.isFinite(Number(n.x)) || Number.isFinite(Number(n.y)));
 
-  // 自动调整连线端口
-  autoAdjustPorts();
+  // 自动布局：只有模板没有明确坐标时才接管位置。
+  if (!hasExplicitLayout && (tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v') && tmpl.swimlanes) {
+    autoLayoutSwimlane(tmpl.swimlanes, tmpl.type === 'swimlane-v' ? 'vertical' : 'horizontal');
+  } else if (!hasExplicitLayout) {
+    runAutoLayout(tmpl.layout || 'vertical', 'normal');
+  } else if ((tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v') && tmpl.swimlanes) {
+    renderSwimlanes(tmpl.swimlanes, tmpl.laneSpacing || 220, tmpl.startY || 50, tmpl.startX || 80, 60, 1, tmpl.type === 'swimlane-v' ? 'vertical' : 'horizontal');
+  }
 
   renderAll();
   showToast(`已应用模板「${tmpl.name}」`);
@@ -948,6 +965,7 @@ function autoLayoutSwimlane(swimlanes, direction) {
     inDegree.set(n.id, 0);
   });
   state.connections.forEach(c => {
+    if (hasGraphPath(adj, c.to, c.from)) return;
     adj.get(c.from).push(c.to);
     inDegree.set(c.to, inDegree.get(c.to) + 1);
   });
@@ -1184,10 +1202,8 @@ function updateTransform() {
       if (!labelEl) return;
       if (state.zoom !== 1) {
         labelEl.style.transform = `scale(${1 / state.zoom})`;
-        labelEl.style.fontSize = `${13 * state.zoom}px`;
       } else {
         labelEl.style.transform = '';
-        labelEl.style.fontSize = '';
       }
     });
   }
@@ -1379,10 +1395,8 @@ function renderNode(node) {
   // 缩放时反向缩放文字，保持文字清晰度
   if (state.zoom !== 1) {
     labelEl.style.transform = `scale(${1 / state.zoom})`;
-    labelEl.style.fontSize = `${13 * state.zoom}px`;
   } else {
     labelEl.style.transform = '';
-    labelEl.style.fontSize = '';
   }
 
   updateNodeBriefEl(node, el);
@@ -1450,6 +1464,11 @@ const PORT_DIR = {
 
 function getPortDirection(port) {
   return PORT_DIR[port] || PORT_DIR.bottom;
+}
+
+function normalizePortName(port, fallback = 'bottom') {
+  const val = String(port || '').trim().toLowerCase();
+  return PORT_DIR[val] ? val : fallback;
 }
 
 function getNodeVisualShape(shape) {
@@ -1558,6 +1577,9 @@ function pointInNodeRect(px, py, node, pad) {
     py > node.y - pad && py < node.y + node.h + pad;
 }
 
+const ROUTING_NODE_PAD = 28;
+const ROUTING_LINE_PAD = 12;
+
 function sampleCubicBezier(p0, p1, p2, p3, steps) {
   const pts = [];
   for (let i = 0; i <= steps; i++) {
@@ -1571,13 +1593,58 @@ function sampleCubicBezier(p0, p1, p2, p3, steps) {
   return pts;
 }
 
-function countPathObstacleHits(points, fromNodeId, toNodeId, pad) {
+function isPointNear(pt1, pt2, tolerance) {
+  return Math.hypot(pt1.x - pt2.x, pt1.y - pt2.y) <= tolerance;
+}
+
+function buildLineAvoidRect(seg, padding) {
+  if (!seg?.from || !seg?.to || !Number.isFinite(padding) || padding <= 0) return null;
+  return {
+    x1: Math.min(seg.from.x, seg.to.x) - padding,
+    y1: Math.min(seg.from.y, seg.to.y) - padding,
+    x2: Math.max(seg.from.x, seg.to.x) + padding,
+    y2: Math.max(seg.from.y, seg.to.y) + padding,
+    sourceType: 'line',
+  };
+}
+
+function getRoutingAvoidRects(fromNodeId, toNodeId, routeOpts = {}, nodePad = ROUTING_NODE_PAD) {
+  const avoidSegments = routeOpts?.avoidSegments || [];
+  const rects = getRoutingObstacleRects(fromNodeId, toNodeId, nodePad);
+  avoidSegments.forEach(seg => {
+    const box = buildLineAvoidRect(seg, ROUTING_LINE_PAD);
+    if (box) rects.push(box);
+  });
+  return rects;
+}
+
+function segmentIntersectsAvoidSegments(a, b, avoidSegments, start, end, tolerance = 10) {
+  if (!avoidSegments || avoidSegments.length === 0) return false;
+  for (const seg of avoidSegments) {
+    const c = seg.from;
+    const d = seg.to;
+    const hit = getSegmentIntersection(a, b, c, d, { trim: 0.0001 });
+    const overlap = hit ? null : getCollinearOverlapBridgePoint(a, b, c, d);
+    if (!hit && !overlap) continue;
+    const point = hit || overlap;
+    if (isPointNear(point, start, tolerance) || isPointNear(point, end, tolerance)) continue;
+    return true;
+  }
+  return false;
+}
+
+function countPathObstacleHits(points, fromNodeId, toNodeId, pad, routeOpts = {}) {
+  const safePad = Number.isFinite(pad) ? pad : ROUTING_NODE_PAD;
+  const rects = getRoutingAvoidRects(fromNodeId, toNodeId, routeOpts, safePad);
+  const avoidSegments = routeOpts?.avoidSegments || [];
   let hits = 0;
-  for (const node of state.nodes) {
-    if (node.id === fromNodeId || node.id === toNodeId) continue;
-    for (const pt of points) {
-      if (pointInNodeRect(pt.x, pt.y, node, pad)) hits++;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    for (const rect of rects) {
+      if (segmentIntersectsRect(a, b, rect)) hits++;
     }
+    if (segmentIntersectsAvoidSegments(a, b, avoidSegments, points[0], points[points.length - 1])) hits++;
   }
   return hits;
 }
@@ -1599,7 +1666,9 @@ function pointInRect(pt, rect) {
 }
 
 function segmentIntersectsRect(a, b, rect) {
-  if (pointInRect(a, rect) || pointInRect(b, rect)) return true;
+  const inA = a.x > rect.x1 && a.x < rect.x2 && a.y > rect.y1 && a.y < rect.y2;
+  const inB = b.x > rect.x1 && b.x < rect.x2 && b.y > rect.y1 && b.y < rect.y2;
+  if (inA || inB) return true;
   const minX = Math.min(a.x, b.x);
   const maxX = Math.max(a.x, b.x);
   const minY = Math.min(a.y, b.y);
@@ -1622,8 +1691,9 @@ function segmentIntersectsRect(a, b, rect) {
   return edges.some(edge => getSegmentIntersection(a, b, edge[0], edge[1]));
 }
 
-function scorePolylineRoute(points, fromNodeId, toNodeId) {
-  const rects = getRoutingObstacleRects(fromNodeId, toNodeId, 18);
+function scorePolylineRoute(points, fromNodeId, toNodeId, routeOpts = {}) {
+  const rects = getRoutingAvoidRects(fromNodeId, toNodeId, routeOpts, ROUTING_NODE_PAD);
+  const avoidSegments = routeOpts.avoidSegments || [];
   let hits = 0;
   let length = 0;
   let bends = Math.max(0, points.length - 2);
@@ -1634,6 +1704,7 @@ function scorePolylineRoute(points, fromNodeId, toNodeId) {
     rects.forEach(rect => {
       if (segmentIntersectsRect(a, b, rect)) hits++;
     });
+    if (segmentIntersectsAvoidSegments(a, b, avoidSegments, points[0], points[points.length - 1])) hits++;
   }
   return hits * 100000 + bends * 250 + length;
 }
@@ -1667,6 +1738,7 @@ function polylineToPath(points) {
 
 function getConnectionPathCandidateRoute(from, to, fromPort, toPort, routeOpts) {
   const { fromNodeId, toNodeId } = routeOpts || {};
+  const avoidSegments = routeOpts?.avoidSegments || [];
   const stub = 28;
   const fd = getPortDirection(fromPort);
   const td = getPortDirection(toPort);
@@ -1675,7 +1747,7 @@ function getConnectionPathCandidateRoute(from, to, fromPort, toPort, routeOpts) 
   const xs = [p1.x, p2.x, (p1.x + p2.x) / 2];
   const ys = [p1.y, p2.y, (p1.y + p2.y) / 2];
 
-  getRoutingObstacleRects(fromNodeId, toNodeId, 24).forEach(rect => {
+  getRoutingAvoidRects(fromNodeId, toNodeId, { avoidSegments }).forEach(rect => {
     xs.push(rect.x1 - 18, rect.x2 + 18);
     ys.push(rect.y1 - 18, rect.y2 + 18);
   });
@@ -1690,7 +1762,7 @@ function getConnectionPathCandidateRoute(from, to, fromPort, toPort, routeOpts) 
   let bestScore = Infinity;
   candidates.forEach(route => {
     const points = simplifyPolyline(route);
-    const score = scorePolylineRoute(points, fromNodeId, toNodeId);
+    const score = scorePolylineRoute(points, fromNodeId, toNodeId, { avoidSegments });
     if (score < bestScore) {
       best = points;
       bestScore = score;
@@ -1712,13 +1784,14 @@ function makeGridPointKey(x, y) {
 
 function getConnectionPathVisio(from, to, fromPort, toPort, routeOpts) {
   const { fromNodeId, toNodeId } = routeOpts || {};
+  const avoidSegments = routeOpts?.avoidSegments || [];
   const stub = 28;
   const margin = 24;
   const fd = getPortDirection(fromPort);
   const td = getPortDirection(toPort);
   const p1 = { x: from.x + fd.x * stub, y: from.y + fd.y * stub };
   const p2 = { x: to.x + td.x * stub, y: to.y + td.y * stub };
-  const obstacles = getRoutingObstacleRects(fromNodeId, toNodeId, margin);
+  const obstacles = getRoutingAvoidRects(fromNodeId, toNodeId, routeOpts);
   const minX = Math.min(from.x, to.x, ...obstacles.map(r => r.x1)) - 80;
   const maxX = Math.max(from.x, to.x, ...obstacles.map(r => r.x2)) + 80;
   const minY = Math.min(from.y, to.y, ...obstacles.map(r => r.y1)) - 80;
@@ -1923,6 +1996,7 @@ function getConnectionPathOrthogonal(from, to, fromPort, toPort) {
 
 function getConnectionPathAvoidance(from, to, fromPort, toPort, routeOpts) {
   const { fromNodeId, toNodeId } = routeOpts || {};
+  const avoidSegments = routeOpts?.avoidSegments || [];
   let scale = 1;
   let bestPath = getConnectionPathBezier(from, to, fromPort, toPort, scale);
   let bestHits = Infinity;
@@ -1936,7 +2010,13 @@ function getConnectionPathAvoidance(from, to, fromPort, toPort, routeOpts) {
       const t = j / 8;
       chordSamples.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t });
     }
-    const hits = countPathObstacleHits([...samples, ...chordSamples], fromNodeId, toNodeId, 18);
+    const hits = countPathObstacleHits(
+      [...samples, ...chordSamples],
+      fromNodeId,
+      toNodeId,
+      18,
+      { avoidSegments },
+    );
     if (hits < bestHits) {
       bestHits = hits;
       bestPath = path;
@@ -1952,12 +2032,21 @@ function getConnectionPathAvoidance(from, to, fromPort, toPort, routeOpts) {
 }
 
 function getConnectionPath(from, to, fromPort, toPort, routeOpts) {
+  if (routeOpts?.fastRouting) {
+    return getConnectionPathBezier(from, to, fromPort, toPort, 1);
+  }
   const mode = state.connRouteMode || 'bezier';
   const fn = CONN_ROUTE_ALGORITHMS[mode] || CONN_ROUTE_ALGORITHMS.bezier;
   const path = fn(from, to, fromPort, toPort, routeOpts);
   if (mode === 'visio') return path;
   const samples = sampleSvgPath(path, 8);
-  const hits = countPathObstacleHits(samples, routeOpts?.fromNodeId, routeOpts?.toNodeId, 12);
+  const hits = countPathObstacleHits(
+    samples,
+    routeOpts?.fromNodeId,
+    routeOpts?.toNodeId,
+    12,
+    { avoidSegments: routeOpts?.avoidSegments },
+  );
   return hits > 0
     ? getConnectionPathVisio(from, to, fromPort, toPort, routeOpts)
     : path;
@@ -1996,7 +2085,8 @@ function sampleSvgPath(pathD, curveSteps = 10) {
   return points;
 }
 
-function getSegmentIntersection(a, b, c, d) {
+function getSegmentIntersection(a, b, c, d, opts = {}) {
+  const trim = opts.trim ?? 0.04;
   const r = { x: b.x - a.x, y: b.y - a.y };
   const s = { x: d.x - c.x, y: d.y - c.y };
   const denom = r.x * s.y - r.y * s.x;
@@ -2005,7 +2095,7 @@ function getSegmentIntersection(a, b, c, d) {
   const dy = c.y - a.y;
   const t = (dx * s.y - dy * s.x) / denom;
   const u = (dx * r.y - dy * r.x) / denom;
-  if (t <= 0.04 || t >= 0.96 || u <= 0.04 || u >= 0.96) return null;
+  if (t <= trim || t >= 1 - trim || u <= trim || u >= 1 - trim) return null;
   return {
     x: a.x + t * r.x,
     y: a.y + t * r.y,
@@ -2050,6 +2140,23 @@ function pointInsideAnyNode(pt, pad = 4) {
   return state.nodes.some(node => pointInNodeRect(pt.x, pt.y, node, pad));
 }
 
+function segmentLength(a, b) {
+  return Math.hypot((b?.x || 0) - (a?.x || 0), (b?.y || 0) - (a?.y || 0));
+}
+
+function pickBridgeSegment(aConn, bConn, aFrom, aTo, bFrom, bTo, aOrder, bOrder) {
+  const aLen = segmentLength(aFrom, aTo);
+  const bLen = segmentLength(bFrom, bTo);
+  if (Math.abs(aLen - bLen) > 0.001) {
+    return aLen > bLen
+      ? { connId: aConn.id, from: aFrom, to: aTo }
+      : { connId: bConn.id, from: bFrom, to: bTo };
+  }
+  return aOrder > bOrder
+    ? { connId: aConn.id, from: aFrom, to: aTo }
+    : { connId: bConn.id, from: bFrom, to: bTo };
+}
+
 function findConnectionCrossings(dataList) {
   const crossings = new Map();
   dataList.forEach(data => crossings.set(data.conn.id, []));
@@ -2063,11 +2170,17 @@ function findConnectionCrossings(dataList) {
         for (let bi = 0; bi < b.points.length - 1; bi++) {
           const hit = getCrossingForSegments(a.points[ai], a.points[ai + 1], b.points[bi], b.points[bi + 1]);
           if (!hit || pointInsideAnyNode(hit, 8)) continue;
-          const jumpConn = j > i ? b.conn.id : a.conn.id;
-          const jumpSeg = j > i
-            ? { from: b.points[bi], to: b.points[bi + 1], hit }
-            : { from: a.points[ai], to: a.points[ai + 1], hit };
-          crossings.get(jumpConn)?.push(jumpSeg);
+          const jumpSeg = pickBridgeSegment(
+            a.conn,
+            b.conn,
+            a.points[ai],
+            a.points[ai + 1],
+            b.points[bi],
+            b.points[bi + 1],
+            i,
+            j,
+          );
+          crossings.get(jumpSeg.connId)?.push({ from: jumpSeg.from, to: jumpSeg.to, hit });
         }
       }
     }
@@ -2119,7 +2232,7 @@ function getConnLabelLayout(from, to, labelPos) {
   return { x: mx + gap, y: my - 2, anchor: 'start', baseline: 'middle' };
 }
 
-function getConnectionRenderData(conn) {
+function getConnectionRenderData(conn, avoidSegments = [], options = {}) {
   const fromNode = state.nodes.find(n => n.id === conn.from);
   const toNode = state.nodes.find(n => n.id === conn.to);
   if (!fromNode || !toNode) return null;
@@ -2132,6 +2245,8 @@ function getConnectionRenderData(conn) {
   const pathD = getConnectionPath(from, to, conn.fromPort, conn.toPort, {
     fromNodeId: conn.from,
     toNodeId: conn.to,
+    avoidSegments,
+    fastRouting: options.fastRouting,
   });
   const points = sampleSvgPath(pathD, 12);
   const layout = conn.label ? getConnLabelLayout(from, to, conn.labelPos) : null;
@@ -2176,9 +2291,23 @@ function updateConnectionsForNode(nodeId) {
 
 function renderConnections() {
   let svg = '';
-  const dataList = state.connections
-    .map(conn => getConnectionRenderData(conn))
-    .filter(Boolean);
+  const dataList = [];
+  const avoidSegments = [];
+  const fastRouting = state.nodes.length > 30 || state.connections.length > 30;
+  for (const conn of state.connections) {
+    const data = getConnectionRenderData(conn, avoidSegments, { fastRouting });
+    if (!data) continue;
+    dataList.push(data);
+    for (let i = 0; i < data.points.length - 1; i++) {
+      avoidSegments.push({
+        from: data.points[i],
+        to: data.points[i + 1],
+        connId: data.conn.id,
+        fromNodeId: data.conn.from,
+        toNodeId: data.conn.to,
+      });
+    }
+  }
   dataList.forEach(data => { svg += buildConnectionSvgFragment(data); });
   svg += buildBridgeSvgFragments(dataList, getThemeVar('--canvas-bg', '#13151d'));
 
@@ -2197,6 +2326,7 @@ function renderConnections() {
           const pathD = getConnectionPath(state.connectTempEnd, fixed, tempPort, conn.toPort, {
             fromNodeId: conn.from,
             toNodeId: conn.to,
+            avoidSegments,
           });
           svg += `<path class="connection-temp" d="${pathD}" fill="none" stroke="#6c8cff" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>`;
         } else {
@@ -2205,6 +2335,7 @@ function renderConnections() {
           const pathD = getConnectionPath(fixed, state.connectTempEnd, conn.fromPort, tempPort, {
             fromNodeId: conn.from,
             toNodeId: conn.to,
+            avoidSegments,
           });
           svg += `<path class="connection-temp" d="${pathD}" fill="none" stroke="#6c8cff" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>`;
         }
@@ -2221,6 +2352,7 @@ function renderConnections() {
       const pathD = getConnectionPath(from, to, state.connectFrom.port, 'top', {
         fromNodeId: state.connectFrom.nodeId,
         toNodeId: null,
+        avoidSegments,
       });
       svg += `<path class="connection-temp" d="${pathD}"
         fill="none" stroke="#6c8cff" stroke-width="1.5" stroke-dasharray="6,4" opacity="0.6"/>`;
@@ -2620,6 +2752,58 @@ function selectNode(nodeId) {
   state.selectedConnectionId = null;
   renderAll();
   syncFlowTableHighlight();
+}
+
+function applyDeepLinkHighlight() {
+  const params = new URLSearchParams(window.location.search);
+  const highlight = params.get('highlightNode');
+  if (!highlight) return;
+  const node = state.nodes.find(
+    (n) => n.id === highlight || String(n.refId) === highlight,
+  );
+  if (!node) {
+    showToast(`Node not found: ${highlight}`);
+    return;
+  }
+  selectNode(node.id);
+  const el = document.getElementById(node.id);
+  if (el) {
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+  showToast(`Highlighted: ${node.label || node.id}`);
+}
+
+function loadE2eSeedNodesFromSession() {
+  try {
+    const raw = sessionStorage.getItem('dw-e2e-seed-nodes');
+    if (!raw) return;
+    const nodes = JSON.parse(raw);
+    if (!Array.isArray(nodes)) return;
+    for (const seed of nodes) {
+      const shape = seed.shape || 'rectangle';
+      const defaults = shapeDefaults[shape] || shapeDefaults.rectangle;
+      state.nodes.push({
+        ...defaults,
+        id: seed.id || `node_${state.nextId++}`,
+        shape,
+        x: seed.x ?? 80,
+        y: seed.y ?? 80,
+        w: seed.w ?? defaults.w,
+        h: seed.h ?? defaults.h,
+        label: seed.label || 'Node',
+        refId: seed.refId,
+      });
+    }
+    ensureNodeRefIds();
+    if (typeof DiagramWeave !== 'undefined') {
+      const page = DiagramWeave.getCurrentPage();
+      if (page) {
+        page.nodes = state.nodes;
+      }
+    }
+  } catch {
+    // ignore invalid e2e seed payload
+  }
 }
 
 function deselectAll() {
@@ -3769,6 +3953,65 @@ function applyFlowText() {
   applyFlowData(nodeRows, connRows);
 }
 
+function hasGraphPath(adjacency, from, to) {
+  if (from === to) return true;
+  const seen = new Set();
+  const queue = [from];
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === to) return true;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    (adjacency.get(cur) || []).forEach(next => queue.push(next));
+  }
+  return false;
+}
+
+function appendImportNote(row, note) {
+  const existing = String(row.detail || '').trim();
+  const suffix = `导入参考：${note}`;
+  row.detail = existing ? `${existing}\n${suffix}` : suffix;
+}
+
+function prepareFlowImportData(nodeRows, connRows, options = {}) {
+  const cleanedNodes = nodeRows.map(row => ({ ...row }));
+  const nodeByRef = new Map(cleanedNodes.map(row => [row.refId, row]));
+  const adjacency = new Map(cleanedNodes.map(row => [row.refId, []]));
+  const validConnections = [];
+  const skippedConnections = [];
+  const referenceConnections = [];
+
+  connRows.forEach((row, index) => {
+    const fromNode = nodeByRef.get(row.from);
+    const toNode = nodeByRef.get(row.to);
+    const rowLabel = row.sourceRow ? `连线表第 ${row.sourceRow} 行` : `连线第 ${index + 1} 行`;
+    const reasonPrefix = `${rowLabel} ${row.from} -> ${row.to}`;
+
+    if (!fromNode || !toNode) {
+      skippedConnections.push({
+        ...row,
+        reason: `${reasonPrefix} 引用了不存在的节点`,
+      });
+      return;
+    }
+
+    if (options.reportCycleConnections && hasGraphPath(adjacency, row.to, row.from)) {
+      const label = row.label ? `（条件：${row.label}）` : '';
+      referenceConnections.push({
+        ...row,
+        reason: `${reasonPrefix}${label} 与已有路径形成回路，已按文档导入，仅供参考`,
+      });
+      appendImportNote(fromNode, `存在到「${toNode.label || row.to}」的回路连线${label}，已按文档导入，仅供参考`);
+      appendImportNote(toNode, `存在来自「${fromNode.label || row.from}」的回路连线${label}，已按文档导入，仅供参考`);
+    }
+
+    validConnections.push(row);
+    adjacency.get(row.from).push(row.to);
+  });
+
+  return { nodeRows: cleanedNodes, connRows: validConnections, skippedConnections, referenceConnections };
+}
+
 function applyFlowData(nodeRows, connRows, showResultToast = true) {
   saveState();
   state.nodes = [];
@@ -3781,11 +4024,20 @@ function applyFlowData(nodeRows, connRows, showResultToast = true) {
   const nodeMap = new Map();
   nodeRows.forEach(row => {
     const shape = shapeDefaults[row.shape] ? row.shape : 'rectangle';
-    const node = createNode(shape, 0, 0, row.label, row.refId);
+    const nodeX = Number.isFinite(row.x) ? row.x : 0;
+    const nodeY = Number.isFinite(row.y) ? row.y : 0;
+    const node = createNode(shape, nodeX, nodeY, row.label, row.refId);
+    if (Number.isFinite(row.w) && row.w > 0) node.w = row.w;
+    if (Number.isFinite(row.h) && row.h > 0) node.h = row.h;
+    if (row.fillColor) node.fillColor = row.fillColor;
+    if (row.strokeColor) node.strokeColor = row.strokeColor;
     node.detail = row.detail;
     node.duration = row.duration;
     if (row.role) node.role = row.role;
-    if (row.lane !== undefined) node.lane = row.lane;
+    if (row.lane !== undefined) {
+      const laneIndex = parseInt(row.lane, 10);
+      if (Number.isFinite(laneIndex)) node.lane = Math.max(0, laneIndex);
+    }
     if (row.layer !== undefined) node.layer = row.layer;
     const targetPageId = resolveTargetPageFromText(row.targetPage);
     if (targetPageId) node.targetPageId = targetPageId;
@@ -3804,23 +4056,28 @@ function applyFlowData(nodeRows, connRows, showResultToast = true) {
       state.connections.push({
         id: 'conn_' + state.nextId++,
         from: fromNode.id,
-        fromPort: 'bottom',
+        fromPort: normalizePortName(row.fromPort, 'bottom'),
         to: toNode.id,
-        toPort: 'top',
+        toPort: normalizePortName(row.toPort, 'top'),
         label: row.label,
+        labelPos: row.labelPos,
       });
     }
   });
 
-  const hasLanes = state.nodes.some(n => n.lane !== undefined && n.lane > 0);
-  if (hasLanes) {
+  const hasExplicitCoordinates = nodeRows.some(row => Number.isFinite(row.x) || Number.isFinite(row.y));
+  const hasLanes = state.nodes.some(n => n.lane !== undefined);
+  if (!hasExplicitCoordinates && hasLanes) {
     const laneSet = new Set(state.nodes.map(n => n.lane || 0));
     const swimlanes = Array.from(laneSet).sort((a, b) => a - b).map(i => `泳道${i + 1}`);
     autoLayoutSwimlane(swimlanes, 'horizontal');
-  } else {
+  } else if (!hasExplicitCoordinates) {
     runAutoLayout('vertical', layoutDensity);
+  } else if (hasLanes) {
+    const laneSet = new Set(state.nodes.map(n => n.lane || 0));
+    const swimlanes = Array.from(laneSet).sort((a, b) => a - b).map(i => `泳道${i + 1}`);
+    renderSwimlanes(swimlanes, 220, 50, 80, 60, 1, 'horizontal');
   }
-  autoAdjustPorts();
   renderAll();
   syncTextFromCanvas(true);
   if (showResultToast) {
@@ -3849,6 +4106,17 @@ function getExportBounds() {
     width: maxX - minX + padding * 2,
     height: maxY - minY + padding * 2,
   };
+}
+
+function exportNodeShapeSvg(node) {
+  if (typeof DiagramWeaveExtensionKernel !== 'undefined') {
+    const result = DiagramWeaveExtensionKernel.invokeExtension('export.nodeShape', { node });
+    if (result.success && result.data?.svg) return result.data.svg;
+  }
+  if (typeof DiagramWeaveExport !== 'undefined') {
+    return DiagramWeaveExport.buildExportNodeShapeSvg(node);
+  }
+  return `<rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="6" fill="#1e2029" stroke="#3a3e55" stroke-width="2"/>`;
 }
 
 function buildExportSVG() {
@@ -3895,8 +4163,8 @@ function buildExportSVG() {
   state.nodes.forEach(node => {
     const cx = node.x + node.w / 2;
     const cy = node.y + node.h / 2;
-    if (typeof DiagramWeaveExport !== 'undefined') {
-      svg += DiagramWeaveExport.buildExportNodeShapeSvg(node);
+    if (typeof DiagramWeaveExport !== 'undefined' || typeof DiagramWeaveExtensionKernel !== 'undefined') {
+      svg += exportNodeShapeSvg(node);
     } else {
       svg += `<rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="6" fill="#1e2029" stroke="#3a3e55" stroke-width="2"/>`;
     }
@@ -4092,9 +4360,42 @@ function downloadProjectJson() {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = getProjectFileBaseName() + '.diagramweave.json';
+  a.download = getProjectFileBaseName() + (projectSession.fileFormat === 'vso' ? '.vso' : '.diagramweave.json');
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function downloadProjectVso() {
+  const prev = projectSession.fileFormat;
+  projectSession.fileFormat = 'vso';
+  downloadProjectJson();
+  projectSession.fileFormat = prev;
+  showToast(typeof t === 'function' ? t('toast.exportVso') : '已导出 DiagramWeave VSO 工作档案');
+}
+
+function isNativeVisioFileName(name) {
+  return NATIVE_VISIO_EXT_RE.test(String(name || ''));
+}
+
+function showVisioPreviewResult(result) {
+  if (!result || !result.success) {
+    const msg = result?.issues?.[0]?.message || 'Visio preview failed';
+    setExcelImportStatus(msg, 'error');
+    showToast(msg);
+    return;
+  }
+  const pages = result.data?.pageCount || 0;
+  const msg = `Visio preview: ${pages} page(s) detected. Mapping stub only — use JSON/VSO/Excel for full import.`;
+  setExcelImportStatus(msg, pages > 0 ? 'info' : 'warn');
+  showToast(msg);
+}
+
+function showNativeVisioUnsupported(fileName = '') {
+  const message = typeof t === 'function'
+    ? t('toast.nativeVisioUnsupported', { file: fileName || '.vsdx/.vsd' })
+    : `暂不支持直接导入 Microsoft Visio 原生档案（${fileName || '.vsdx/.vsd'}）。请先转成 DiagramWeave JSON / VSO 或 Excel。`;
+  setExcelImportStatus(message, 'error');
+  showToast(message);
 }
 
 function downloadProjectExcel() {
@@ -4115,17 +4416,23 @@ async function requestProjectSaveAs() {
     showToast('浏览器不支持自动保存到原文件，已改为下载工作文件');
     return false;
   }
+  const suggestedExt = projectSession.fileFormat === 'excel'
+    ? '.diagramweave.xlsx'
+    : projectSession.fileFormat === 'vso'
+      ? '.vso'
+      : '.diagramweave.json';
   const handle = await window.showSaveFilePicker({
-    suggestedName: getProjectFileBaseName() + (projectSession.fileFormat === 'excel' ? '.diagramweave.xlsx' : '.diagramweave.json'),
+    suggestedName: getProjectFileBaseName() + suggestedExt,
     types: [{
-      description: 'DiagramWeave JSON Project',
-      accept: { 'application/json': ['.json'] },
+      description: 'DiagramWeave JSON / VSO Project',
+      accept: { 'application/json': ['.json', '.vso'] },
     }, {
       description: 'DiagramWeave Excel Project',
       accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
     }],
   });
-  projectSession.fileFormat = handle.name?.toLowerCase().endsWith('.xlsx') ? 'excel' : 'json';
+  const lowerName = handle.name?.toLowerCase() || '';
+  projectSession.fileFormat = lowerName.endsWith('.xlsx') ? 'excel' : lowerName.endsWith('.vso') ? 'vso' : 'json';
   await writeProjectFile(handle);
   projectSession.fileHandle = handle;
   restartAutosaveTimer();
@@ -4180,14 +4487,26 @@ async function openProjectFileWithPicker() {
     multiple: false,
     types: [{
       description: 'DiagramWeave Project',
-      accept: { 'application/json': ['.json'] },
+      accept: { 'application/json': ['.json', '.vso'] },
     }, {
       description: 'DiagramWeave Excel Project',
       accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
+    }, {
+      description: 'Microsoft Visio (not yet supported)',
+      accept: {
+        'application/vnd.ms-visio.drawing.main+xml': ['.vsdx', '.vsdm'],
+        'application/vnd.visio': ['.vsd', '.vdx'],
+      },
     }],
   });
   const file = await handle.getFile();
-  const isExcel = file.name.toLowerCase().endsWith('.xlsx');
+  const lowerName = file.name.toLowerCase();
+  if (isNativeVisioFileName(file.name)) {
+    showNativeVisioUnsupported(file.name);
+    return;
+  }
+  const isExcel = lowerName.endsWith('.xlsx');
+  const isVso = lowerName.endsWith('.vso');
   const raw = isExcel ? null : JSON.parse(await file.text());
   const loaded = isExcel
     ? loadProjectExcelArrayBuffer(await file.arrayBuffer())
@@ -4202,8 +4521,8 @@ async function openProjectFileWithPicker() {
       return;
     }
     projectSession.fileHandle = handle;
-    projectSession.fileFormat = isExcel ? 'excel' : 'json';
-    if (!isExcel && !raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
+    projectSession.fileFormat = isExcel ? 'excel' : isVso ? 'vso' : 'json';
+    if (!isExcel && !raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$|\.vso$/i, '');
     updateProjectTitle();
     restartAutosaveTimer();
     showToast('已打开工作文件，自动保存已启用');
@@ -4308,9 +4627,18 @@ function getFlowDocumentPayload() {
 }
 
 function loadFlowDocumentPayload(raw) {
-  const data = typeof DiagramWeaveSanitize !== 'undefined'
-    ? DiagramWeaveSanitize.sanitizeFlowDocument(raw, { knownShapes: shapeDefaults })
-    : raw;
+  let data = null;
+  if (typeof DiagramWeaveExtensionKernel !== 'undefined') {
+    const result = DiagramWeaveExtensionKernel.invokeExtension('sanitize.document', {
+      raw,
+      options: { knownShapes: shapeDefaults },
+    });
+    if (result.success) data = result.data;
+  } else if (typeof DiagramWeaveSanitize !== 'undefined') {
+    data = DiagramWeaveSanitize.sanitizeFlowDocument(raw, { knownShapes: shapeDefaults });
+  } else {
+    data = raw;
+  }
   if (!data) {
     showToast('文件格式无效或数据被拒绝');
     return false;
@@ -4377,7 +4705,25 @@ async function importJSON() {
 function handleFileLoad(e) {
   const file = e.target.files[0];
   if (!file) return;
-  if (file.name.toLowerCase().endsWith('.xlsx')) {
+  const lowerName = file.name.toLowerCase();
+  if (isNativeVisioFileName(file.name)) {
+    file.arrayBuffer()
+      .then((buffer) => {
+        if (typeof DiagramWeaveExtensionKernel !== 'undefined') {
+          const result = DiagramWeaveExtensionKernel.invokeExtension('visio.preview', {
+            buffer,
+            fileName: file.name,
+          });
+          showVisioPreviewResult(result);
+        } else {
+          showNativeVisioUnsupported(file.name);
+        }
+      })
+      .catch(() => showNativeVisioUnsupported(file.name));
+    e.target.value = '';
+    return;
+  }
+  if (lowerName.endsWith('.xlsx')) {
     file.arrayBuffer()
       .then(buffer => {
         if (loadProjectExcelArrayBuffer(buffer)) {
@@ -4399,8 +4745,8 @@ function handleFileLoad(e) {
       const loaded = loadFlowDocumentPayload(raw);
       if (loaded) {
         projectSession.fileHandle = null;
-        projectSession.fileFormat = 'json';
-        if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$/i, '');
+        projectSession.fileFormat = lowerName.endsWith('.vso') ? 'vso' : 'json';
+        if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$|\.vso$/i, '');
         updateProjectTitle();
         restartAutosaveTimer();
         showToast('浏览器不支持原文件自动保存；请使用保存按钮下载更新后的工作文件');
@@ -4523,6 +4869,49 @@ function getPresentationPathItem(index = presentState.cursor) {
   return presentState.pathHistory[index];
 }
 
+function isPresentationStepNode(node) {
+  if (!node) return false;
+  return !['circle', 'annotation', 'note', 'offpage'].includes(node.shape);
+}
+
+function detectPresentationStepPolarity(node) {
+  const explicit = String(
+    node.stepType || node.polarity || node.stepTypeLabel || node.phase || node.type || '',
+  ).trim().toLowerCase();
+  if (explicit.includes('virtual') || explicit.includes('虚')) return 'virtual';
+  if (explicit.includes('real') || explicit.includes('实')) return 'real';
+
+  const markerText = String(
+    `${node.role || ''} ${node.detail || ''} ${node.label || ''}`,
+  ).toLowerCase();
+  if (markerText.includes('虚')) return 'virtual';
+  if (markerText.includes('实')) return 'real';
+  return 'unknown';
+}
+
+function getPresentationStepPolarityLabel(node) {
+  const kind = detectPresentationStepPolarity(node);
+  if (kind === 'virtual') return '虚步';
+  if (kind === 'real') return '实步';
+  return '未标注';
+}
+
+function countPresentationStepDistribution() {
+  const counts = { virtual: 0, real: 0, unknown: 0, total: 0 };
+  state.nodes.forEach(node => {
+    if (!isPresentationStepNode(node)) return;
+    counts.total += 1;
+    const kind = detectPresentationStepPolarity(node);
+    if (counts[kind] !== undefined) counts[kind]++;
+    else counts.unknown++;
+  });
+  return counts;
+}
+
+function countPresentationTotalSteps() {
+  return countPresentationStepDistribution().total;
+}
+
 function getCurrentPresentationNodeId() {
   const item = getPresentationPathItem();
   if (!item) return null;
@@ -4569,6 +4958,14 @@ function countPresentationNodeSteps(upToIndex) {
   return count;
 }
 
+function ensurePresentationTwoPaneLayout() {
+  const sidebar = document.getElementById('presentSidebar');
+  const body = document.getElementById('presentSidebarBody');
+  const dock = document.getElementById('presentZoomDock');
+  if (!sidebar || !body || !dock || dock.parentElement === sidebar) return;
+  sidebar.insertBefore(dock, body);
+}
+
 // 进入演示模式
 function enterPresentation() {
   if (state.nodes.length === 0) {
@@ -4592,6 +4989,7 @@ function enterPresentation() {
   presentState.branchResolve = null;
 
   generateNodeDescriptions();
+  ensurePresentationTwoPaneLayout();
 
   state.selectedNodeId = null;
   state.selectedConnectionId = null;
@@ -4626,15 +5024,13 @@ function exitPresentation() {
   presentState.visitedNodes.clear();
   presentState.visitedConns.clear();
   presentState.currentConnId = null;
-  presentState.branchResolve = null;
+  cancelBranchSelector();
   presentState.descriptions = {};
 
   document.body.classList.remove('presentation-mode');
 
   const hints = document.querySelector('.shortcuts-hint');
   if (hints) hints.style.display = '';
-
-  document.getElementById('branchOverlay').classList.remove('visible');
 
   const panel = document.getElementById('presentSidebar');
   if (panel) panel.classList.remove('visible');
@@ -4777,7 +5173,7 @@ function clearPresentZoomPreview() {
   const label = document.getElementById('presentZoomLabel');
   if (preview) preview.innerHTML = '';
   dock?.classList.remove('has-preview');
-  if (label) label.textContent = '当前步骤';
+  if (label) label.textContent = t('present.currentStep');
 }
 
 function renderPresentZoomPreview(node, connStep) {
@@ -4787,7 +5183,7 @@ function renderPresentZoomPreview(node, connStep) {
   if (!dock || !preview) return;
 
   if (connStep) {
-    if (label) label.textContent = '当前路径';
+    if (label) label.textContent = t('present.path');
     const conn = state.connections.find(c => c.id === connStep.connId);
     if (!conn) {
       clearPresentZoomPreview();
@@ -4798,14 +5194,14 @@ function renderPresentZoomPreview(node, connStep) {
     preview.innerHTML = `
       <div class="present-zoom-path-card">
         <div class="present-zoom-route"><span>${escapeHtml(fromNode?.label || '?')}</span>
-          <span class="route-arrow">→</span><span>${escapeHtml(conn.label || '路径')}</span>
+          <span class="route-arrow">→</span><span>${escapeHtml(conn.label || t('present.path'))}</span>
           <span class="route-arrow">→</span><span>${escapeHtml(toNode?.label || '?')}</span></div>
       </div>`;
     dock.classList.add('has-preview');
     return;
   }
 
-  if (label) label.textContent = '当前步骤';
+  if (label) label.textContent = t('present.currentStep');
 
   if (!node) {
     clearPresentZoomPreview();
@@ -4866,8 +5262,15 @@ function updateContentPanel() {
   if (!sidebar) return;
 
   if (presentState.cursor < 0) {
-    document.getElementById('sidebarStepNum').textContent = '步骤 —';
-    document.getElementById('sidebarTitle').textContent = '按 → 开始演示';
+    document.getElementById('sidebarStepNum').textContent = `${t('present.step')} —`;
+    document.getElementById('sidebarTitle').textContent = t('present.placeholder');
+    document.getElementById('sidebarName').textContent = '—';
+    document.getElementById('sidebarPolarity').textContent = '—';
+    document.getElementById('sidebarType').textContent = '—';
+    document.getElementById('sidebarRefId').textContent = '—';
+    document.getElementById('sidebarRole').textContent = '—';
+    document.getElementById('sidebarDuration').textContent = '—';
+    document.getElementById('sidebarDesc').textContent = t('present.leftDescHint');
     clearPresentZoomPreview();
     return;
   }
@@ -4889,8 +5292,8 @@ function updateContentPanel() {
       const c = state.connections.find(x => x.id === id);
       return c ? `<li>${escapeHtml(formatConnPathLabel(c))}</li>` : '';
     }).filter(Boolean);
-    inList.innerHTML = inItems.length ? inItems.join('') : '<li>（无来路连线）</li>';
-    outList.innerHTML = outItems.length ? outItems.join('') : '<li>（无去路连线）</li>';
+    inList.innerHTML = inItems.length ? inItems.join('') : `<li>${escapeHtml(t('present.noIncoming'))}</li>`;
+    outList.innerHTML = outItems.length ? outItems.join('') : `<li>${escapeHtml(t('present.noOutgoing'))}</li>`;
   };
 
   if (step.connId) {
@@ -4898,17 +5301,19 @@ function updateContentPanel() {
     if (!conn) return;
     const fromNode = state.nodes.find(n => n.id === conn.from);
     const toNode = state.nodes.find(n => n.id === conn.to);
-    const cond = conn.label || '默认路径';
+    const cond = conn.label || t('present.defaultPath');
 
-    document.getElementById('sidebarStepNum').textContent = `路径 ${nodeStepNum}`;
-    document.getElementById('sidebarTitle').textContent = `沿「${cond}」前进`;
-    document.getElementById('sidebarType').textContent = '连线路径';
+    document.getElementById('sidebarStepNum').textContent = `${t('present.path')} ${nodeStepNum}`;
+    document.getElementById('sidebarTitle').textContent = `${cond}`;
+    document.getElementById('sidebarName').textContent = `${fromNode?.label || ''} -> ${toNode?.label || ''}`.trim() || '—';
+    document.getElementById('sidebarType').textContent = t('present.pathLabel');
+    document.getElementById('sidebarPolarity').textContent = '—';
     document.getElementById('sidebarRefId').textContent = '—';
     document.getElementById('sidebarRole').textContent = '—';
     document.getElementById('sidebarDuration').textContent = '—';
     document.getElementById('sidebarDesc').textContent = fromNode && toNode
-      ? `正在从「${fromNode.label}」沿「${cond}」前往「${toNode.label}」。再按一次下一步到达目标节点。`
-      : '沿当前连线前进中。';
+      ? t('present.routeTo', { from: fromNode.label, cond, to: toNode.label })
+      : t('present.routeMoving');
     document.getElementById('sidebarBranchRow').style.display = 'none';
     setPathLists();
     renderPresentZoomPreview(null, step);
@@ -4921,11 +5326,13 @@ function updateContentPanel() {
   const typeName = shapeNames[node.shape] || node.shape;
   const desc = node.detail?.trim()
     || presentState.descriptions[node.id]
-    || '执行该流程步骤。';
+    || t('present.runStep');
 
-  document.getElementById('sidebarStepNum').textContent = `步骤 ${nodeStepNum}`;
+  document.getElementById('sidebarStepNum').textContent = `${t('present.step')} ${nodeStepNum}`;
   document.getElementById('sidebarTitle').textContent = node.label;
+  document.getElementById('sidebarName').textContent = node.label || '—';
   document.getElementById('sidebarType').textContent = typeName;
+  document.getElementById('sidebarPolarity').textContent = getPresentationStepPolarityLabel(node);
   document.getElementById('sidebarRefId').textContent = node.refId ?? '—';
   document.getElementById('sidebarRole').textContent = node.role?.trim() || '—';
   document.getElementById('sidebarDuration').textContent =
@@ -4936,7 +5343,7 @@ function updateContentPanel() {
   const outConns = state.connections.filter(c => c.from === node.id);
   if (outConns.length > 1) {
     document.getElementById('sidebarBranch').textContent =
-      outConns.map(c => c.label || '默认').join(' / ');
+      outConns.map(c => c.label || t('present.defaultBranch')).join(' / ');
     branchRow.style.display = 'flex';
   } else {
     branchRow.style.display = 'none';
@@ -4948,17 +5355,36 @@ function updateContentPanel() {
 
 // 更新演示视图
 function updatePresentationView() {
+  const stepDistribution = countPresentationStepDistribution();
+  const totalSteps = stepDistribution.total;
   const nodeStepNum = presentState.cursor >= 0
     ? countPresentationNodeSteps(presentState.cursor)
     : 0;
 
   const stepInfo = document.getElementById('presentStepInfo');
-  stepInfo.innerHTML = presentState.cursor < 0
-    ? '步骤 <span>按 → 开始</span>'
-    : `步骤 <span>${nodeStepNum}</span>`;
+  if (stepInfo) {
+    stepInfo.innerHTML = presentState.cursor < 0
+      ? `${escapeHtml(t('present.step'))} <span>${escapeHtml(t('present.placeholder'))}</span>`
+      : `${escapeHtml(t('present.step'))} <span>${nodeStepNum}</span>`;
+  }
 
   const floatIndicator = document.getElementById('presentFloatIndicator');
-  let currentLabel = '未开始';
+  if (!floatIndicator) return;
+
+  const summaryProjectEl = document.getElementById('presentSummaryProject');
+  const summaryTotalEl = document.getElementById('presentSummaryTotalSteps');
+  const summaryCurrentEl = document.getElementById('presentSummaryCurrentStep');
+  const summaryVirtualEl = document.getElementById('presentSummaryVirtualSteps');
+  const summaryRealEl = document.getElementById('presentSummaryRealSteps');
+  const summaryUnknownEl = document.getElementById('presentSummaryUnknownSteps');
+  if (summaryProjectEl) summaryProjectEl.textContent = projectSession.name || DEFAULT_PROJECT_NAME;
+  if (summaryTotalEl) summaryTotalEl.textContent = `${totalSteps}`;
+  if (summaryCurrentEl) summaryCurrentEl.textContent = `${nodeStepNum}/${totalSteps}`;
+  if (summaryVirtualEl) summaryVirtualEl.textContent = `${stepDistribution.virtual}`;
+  if (summaryRealEl) summaryRealEl.textContent = `${stepDistribution.real}`;
+  if (summaryUnknownEl) summaryUnknownEl.textContent = `${stepDistribution.unknown}`;
+
+  let currentLabel = t('present.notStarted');
   const step = getPresentationPathItem();
   if (step?.nodeId) {
     const node = state.nodes.find(n => n.id === step.nodeId);
@@ -4968,9 +5394,9 @@ function updatePresentationView() {
     const toNode = conn ? state.nodes.find(n => n.id === conn.to) : null;
     currentLabel = conn?.label
       ? `→ ${conn.label} → ${toNode?.label || ''}`
-      : `→ ${toNode?.label || '下一节点'}`;
+      : `→ ${toNode?.label || t('present.nextNode')}`;
   }
-  floatIndicator.innerHTML = `<span class="step-num">${nodeStepNum > 0 ? nodeStepNum : '—'}</span> · 当前：${escapeHtml(currentLabel)}`;
+  floatIndicator.innerHTML = `<span class="step-num">${nodeStepNum > 0 ? nodeStepNum : '—'}</span> · ${escapeHtml(t('present.current'))}: ${escapeHtml(currentLabel)}`;
 }
 
 // 应用演示样式到节点和连线
@@ -5040,6 +5466,25 @@ function clearPresentationStyles() {
 }
 
 // 演示：下一步（节点 → 连线 → 节点，沿实际路径行走）
+function cancelBranchSelector() {
+  document.getElementById('branchOverlay')?.classList.remove('visible');
+  const resolve = presentState.branchResolve;
+  presentState.branchResolve = null;
+  if (resolve) resolve(null);
+}
+
+function getPresentationFreshOutConns(nodeId) {
+  return state.connections.filter(c =>
+    c.from === nodeId
+    && !presentState.visitedConns.has(c.id)
+    && !presentState.visitedNodes.has(c.to)
+  );
+}
+
+function warnPresentationLoopBlocked() {
+  showToast('检测到回路：当前出口会回到已走过的节点。系统已停止继续自动推进，可上一步选择其他路径或退出演示。');
+}
+
 async function presentNext() {
   if (!presentState.active) return;
   if (document.getElementById('branchOverlay').classList.contains('visible')) return;
@@ -5082,9 +5527,15 @@ async function presentNext() {
     return;
   }
 
-  let conn = outConns[0];
-  if (outConns.length > 1) {
-    conn = await showBranchSelector(outConns);
+  const freshOutConns = getPresentationFreshOutConns(nodeId);
+  if (freshOutConns.length === 0) {
+    warnPresentationLoopBlocked();
+    return;
+  }
+
+  let conn = freshOutConns[0];
+  if (freshOutConns.length > 1) {
+    conn = await showBranchSelector(freshOutConns);
     if (!conn) return;
   }
 
@@ -5127,6 +5578,15 @@ function showBranchSelector(outConns) {
       optionsContainer.appendChild(btn);
     });
 
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'branch-option';
+    stopBtn.innerHTML = `
+      <span class="branch-option-label">停止在当前步骤</span>
+      <span class="branch-option-target">可上一步或退出演示</span>
+    `;
+    stopBtn.addEventListener('click', () => cancelBranchSelector());
+    optionsContainer.appendChild(stopBtn);
+
     overlay.classList.add('visible');
     presentState.branchResolve = resolve;
   });
@@ -5137,8 +5597,7 @@ function presentPrev() {
   if (!presentState.active) return;
   if (presentState.cursor < 0) return;
 
-  document.getElementById('branchOverlay').classList.remove('visible');
-  presentState.branchResolve = null;
+  cancelBranchSelector();
 
   presentState.cursor--;
   if (presentState.cursor < 0) {
@@ -5163,7 +5622,7 @@ function presentPrev() {
 function presentFirst() {
   if (!presentState.active || !presentState.startNodeId) return;
 
-  document.getElementById('branchOverlay').classList.remove('visible');
+  cancelBranchSelector();
   presentState.pathHistory = [{ nodeId: presentState.startNodeId }];
   presentState.cursor = 0;
   rebuildPresentationVisited(0);
@@ -5177,7 +5636,7 @@ function presentFirst() {
 // 演示：沿默认路径（每条分支选第一条连线）快进到终点
 async function presentLast() {
   if (!presentState.active) return;
-  document.getElementById('branchOverlay').classList.remove('visible');
+  cancelBranchSelector();
 
   if (presentState.cursor < 0) {
     await presentNext();
@@ -5196,7 +5655,13 @@ async function presentLast() {
     const outConns = state.connections.filter(c => c.from === step.nodeId);
     if (outConns.length === 0) break;
 
-    const conn = outConns[0];
+    const freshOutConns = getPresentationFreshOutConns(step.nodeId);
+    if (freshOutConns.length === 0) {
+      warnPresentationLoopBlocked();
+      break;
+    }
+
+    const conn = freshOutConns[0];
     if (presentState.cursor < presentState.pathHistory.length - 1) {
       presentState.pathHistory = presentState.pathHistory.slice(0, presentState.cursor + 1);
     }
@@ -5304,6 +5769,12 @@ function exportCanvasToExcel() {
       '简介': n.label || '',
       '角色': n.role || '',
       '形状': n.shape || 'rectangle',
+      'X': n.x,
+      'Y': n.y,
+      '宽': n.w,
+      '高': n.h,
+      '填充色': n.fillColor || '',
+      '线条色': n.strokeColor || '',
       '详细说明': n.detail || '',
       '耗时天': n.duration || 0,
       '泳道': n.lane ?? '',
@@ -5312,8 +5783,11 @@ function exportCanvasToExcel() {
     }));
   const connData = state.connections.map(c => ({
     '起点编号': refByNodeId.get(c.from),
+    '起点端口': c.fromPort || 'bottom',
     '终点编号': refByNodeId.get(c.to),
+    '终点端口': c.toPort || 'top',
     '条件': c.label || '',
+    '标签位置': c.labelPos ?? '',
   })).filter(c => c['起点编号'] != null && c['终点编号'] != null);
   buildExcelWorkbook({ nodeData, connData }, 'DiagramWeave流程数据.xlsx');
   showToast('已导出当前流程到 Excel');
@@ -5475,28 +5949,29 @@ function getProjectExcelArrayBuffer() {
 function buildExcelWorkbook(data, filename) {
   const wb = XLSX.utils.book_new();
   const nodeData = data?.nodeData ?? [
-    { '编号': 1, '简介': '开始', '角色': '', '形状': 'terminator', '详细说明': '流程起点', '耗时天': 0, '泳道': '', '图层': '', '目标页': '' },
-    { '编号': 2, '简介': '提交申请', '角色': '申请人', '形状': 'rectangle', '详细说明': '填写并提交表单', '耗时天': 0.5, '泳道': '', '图层': '', '目标页': '' },
-    { '编号': 3, '简介': '经理审批', '角色': '经理', '形状': 'rectangle', '详细说明': '审核材料', '耗时天': 2, '泳道': '', '图层': '', '目标页': '' },
-    { '编号': 4, '简介': '通过？', '角色': '经理', '形状': 'diamond', '详细说明': '', '耗时天': 0, '泳道': '', '图层': '', '目标页': '' },
-    { '编号': 5, '简介': '结束', '角色': '', '形状': 'terminator', '详细说明': '流程结束', '耗时天': 0, '泳道': '', '图层': '', '目标页': '' },
+    { '编号': 1, '简介': '开始', '角色': '', '形状': 'terminator', 'X': 120, 'Y': 80, '宽': 140, '高': 50, '填充色': '', '线条色': '', '详细说明': '流程起点', '耗时天': 0, '泳道': '', '图层': '', '目标页': '' },
+    { '编号': 2, '简介': '提交申请', '角色': '申请人', '形状': 'rectangle', 'X': 120, 'Y': 180, '宽': 140, '高': 60, '填充色': '', '线条色': '', '详细说明': '填写并提交表单', '耗时天': 0.5, '泳道': '', '图层': '', '目标页': '' },
+    { '编号': 3, '简介': '经理审批', '角色': '经理', '形状': 'rectangle', 'X': 120, 'Y': 300, '宽': 140, '高': 60, '填充色': '', '线条色': '', '详细说明': '审核材料', '耗时天': 2, '泳道': '', '图层': '', '目标页': '' },
+    { '编号': 4, '简介': '通过？', '角色': '经理', '形状': 'diamond', 'X': 130, 'Y': 430, '宽': 120, '高': 80, '填充色': '', '线条色': '', '详细说明': '', '耗时天': 0, '泳道': '', '图层': '', '目标页': '' },
+    { '编号': 5, '简介': '结束', '角色': '', '形状': 'terminator', 'X': 120, 'Y': 560, '宽': 140, '高': 50, '填充色': '', '线条色': '', '详细说明': '流程结束', '耗时天': 0, '泳道': '', '图层': '', '目标页': '' },
   ];
   const connData = data?.connData ?? [
-    { '起点编号': 1, '终点编号': 2, '条件': '' },
-    { '起点编号': 2, '终点编号': 3, '条件': '' },
-    { '起点编号': 3, '终点编号': 4, '条件': '' },
-    { '起点编号': 4, '终点编号': 5, '条件': '是' },
+    { '起点编号': 1, '起点端口': 'bottom', '终点编号': 2, '终点端口': 'top', '条件': '', '标签位置': '' },
+    { '起点编号': 2, '起点端口': 'bottom', '终点编号': 3, '终点端口': 'top', '条件': '', '标签位置': '' },
+    { '起点编号': 3, '起点端口': 'bottom', '终点编号': 4, '终点端口': 'top', '条件': '', '标签位置': '' },
+    { '起点编号': 4, '起点端口': 'bottom', '终点编号': 5, '终点端口': 'top', '条件': '是', '标签位置': 'auto' },
   ];
 
   const nodeSheet = XLSX.utils.json_to_sheet(nodeData);
   nodeSheet['!cols'] = [
-    { wch: 6 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 28 },
-    { wch: 8 }, { wch: 6 }, { wch: 6 }, { wch: 12 },
+    { wch: 6 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 8 },
+    { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 10 },
+    { wch: 28 }, { wch: 8 }, { wch: 6 }, { wch: 6 }, { wch: 12 },
   ];
   XLSX.utils.book_append_sheet(wb, nodeSheet, '节点表');
 
   const connSheet = XLSX.utils.json_to_sheet(connData);
-  connSheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 12 }];
+  connSheet['!cols'] = [{ wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, connSheet, '连线表');
 
   const helpRows = [
@@ -5504,6 +5979,9 @@ function buildExcelWorkbook(data, filename) {
     { '列名': '简介', '说明': '形状上显示的一行标题', '必填': '建议', '示例': '开始、提交申请' },
     { '列名': '角色', '说明': '负责该步骤的角色', '必填': '否', '示例': '申请人、经理' },
     { '列名': '形状', '说明': '图形类型（见下方列表）', '必填': '否', '示例': 'rectangle' },
+    { '列名': 'X / Y', '说明': '节点左上角坐标；填写后导入会按坐标原样落图，不自动排版', '必填': '否', '示例': '120, 180' },
+    { '列名': '宽 / 高', '说明': '节点尺寸；留空时使用图形默认尺寸', '必填': '否', '示例': '140, 60' },
+    { '列名': '填充色 / 线条色', '说明': '节点颜色，支持 #RRGGBB；留空时使用主题默认色', '必填': '否', '示例': '#ffffff' },
     { '列名': '详细说明', '说明': '步骤详细内容介绍', '必填': '否', '示例': '填写表单并上传附件' },
     { '列名': '耗时天', '说明': '该步骤需时（天，可小数）', '必填': '否', '示例': '0.5, 2' },
     { '列名': '泳道', '说明': '泳道图分区（从 0 起）', '必填': '否', '示例': '0, 1' },
@@ -5511,8 +5989,11 @@ function buildExcelWorkbook(data, filename) {
     { '列名': '目标页', '说明': '跨页引用时填目标页名称', '必填': '否', '示例': '页面 2' },
     { '列名': '', '说明': '', '必填': '', '示例': '' },
     { '列名': '起点编号', '说明': '连线表：起始节点编号', '必填': '是', '示例': '1' },
+    { '列名': '起点端口', '说明': '起点连接点，只允许 top / bottom / left / right', '必填': '否', '示例': 'bottom' },
     { '列名': '终点编号', '说明': '连线表：目标节点编号', '必填': '是', '示例': '2' },
+    { '列名': '终点端口', '说明': '终点连接点，只允许 top / bottom / left / right', '必填': '否', '示例': 'top' },
     { '列名': '条件', '说明': '连线条件标签', '必填': '否', '示例': '是、否' },
+    { '列名': '标签位置', '说明': '连线文字位置，可填 auto / above / right', '必填': '否', '示例': 'auto' },
     { '列名': '', '说明': '', '必填': '', '示例': '' },
     { '列名': '形状代码', '说明': '中文名', '必填': '', '示例': '' },
   ];
@@ -5540,11 +6021,28 @@ function sanitizeExcelText(value, maxLen) {
     .slice(0, maxLen);
 }
 
+function parseOptionalExcelNumber(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function parseExcelLabelPos(value) {
+  const text = String(value || '').trim().toLowerCase();
+  return ['auto', 'above', 'right'].includes(text) ? text : undefined;
+}
+
 function parseExcelNodeRow(row) {
   const id = pickExcelField(row, ['编号', 'id', 'ID', 'refId']);
   const label = pickExcelField(row, ['简介', 'label', '名称', '节点名称', 'name']);
   const role = pickExcelField(row, ['角色', 'role']);
   const shape = pickExcelField(row, ['形状', 'shape', 'type', '图形']) || 'rectangle';
+  const x = parseOptionalExcelNumber(pickExcelField(row, ['X', 'x', '横坐标']));
+  const y = parseOptionalExcelNumber(pickExcelField(row, ['Y', 'y', '纵坐标']));
+  const w = parseOptionalExcelNumber(pickExcelField(row, ['宽', 'width', 'W']));
+  const h = parseOptionalExcelNumber(pickExcelField(row, ['高', 'height', 'H']));
+  const fillColor = pickExcelField(row, ['填充色', 'fillColor', 'fill', '背景色']);
+  const strokeColor = pickExcelField(row, ['线条色', '边框色', 'strokeColor', 'stroke']);
   const detail = pickExcelField(row, ['详细说明', 'detail', '说明', 'description']);
   const rawDuration = parseFloat(pickExcelField(row, ['耗时天', '耗时', 'duration', '时间', 'time']) || 0) || 0;
   const duration = Math.max(0, Math.min(999999, rawDuration));
@@ -5556,6 +6054,12 @@ function parseExcelNodeRow(row) {
     label: sanitizeExcelText(label || '未命名', MAX_EXCEL_LABEL_LENGTH),
     role: sanitizeExcelText(role, MAX_EXCEL_ROLE_LENGTH),
     shape: isKnownFlowShape(shape) ? shape : 'rectangle',
+    x,
+    y,
+    w,
+    h,
+    fillColor: sanitizeExcelText(fillColor, 20),
+    strokeColor: sanitizeExcelText(strokeColor, 20),
     detail: sanitizeExcelText(detail, MAX_EXCEL_DETAIL_LENGTH),
     duration,
     lane: laneRaw !== '' ? Math.max(0, Math.min(99999, parseInt(laneRaw, 10) || 0)) : undefined,
@@ -5565,51 +6069,65 @@ function parseExcelNodeRow(row) {
 }
 
 function showExcelDataDialog() {
+  setExcelImportStatus('');
   document.getElementById('excelDataOverlay').classList.add('visible');
 }
 
 function hideExcelDataDialog() {
+  setExcelImportStatus('');
   document.getElementById('excelDataOverlay').classList.remove('visible');
 }
 
-function triggerExcelUpload() {
-  document.getElementById('excelInput').click();
+function setExcelImportStatus(message, kind = '') {
+  const el = document.getElementById('excelImportStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.hidden = !message;
+  el.classList.toggle('is-working', kind === 'working');
+  el.classList.toggle('is-error', kind === 'error');
+  el.classList.toggle('is-success', kind === 'success');
 }
 
-function triggerProjectExcelUpload() {
-  document.getElementById('projectExcelInput').click();
+function reportExcelImportError(message) {
+  setExcelImportStatus(message, 'error');
+  showToast(message);
 }
 
-function handleProjectExcelLoad(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (typeof XLSX === 'undefined') {
-    showToast('Excel 库未加载，请确认 vendor 目录完整');
-    e.target.value = '';
-    return;
-  }
-  processProjectExcelFile(file);
-  e.target.value = '';
+function clearExcelImportStatus() {
+  setExcelImportStatus('');
 }
 
-function processProjectExcelFile(file) {
-  if (file.size > MAX_EXCEL_FILE_BYTES) {
-    showToast(`Excel 文件过大，最大允许 5MB`);
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      if (loadProjectExcelArrayBuffer(ev.target.result)) {
-        projectSession.fileHandle = null;
-        projectSession.fileFormat = 'excel';
-        hideExcelDataDialog();
-      }
-    } catch (err) {
-      showToast('Excel 工作文件解析失败：' + err.message);
+function waitForNextPaint() {
+  return new Promise(resolve => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve());
+      return;
     }
-  };
-  reader.readAsArrayBuffer(file);
+    setTimeout(resolve, 0);
+  });
+}
+
+async function showExcelImportWorking() {
+  setExcelImportStatus('正在导入中...', 'working');
+  await waitForNextPaint();
+}
+
+function getExcelOpenPickerTypes() {
+  return [{
+    description: 'Excel file',
+    accept: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+    },
+  }];
+}
+
+async function triggerExcelUpload() {
+  await openExcelFilePicker(processExcelFile, 'excelInput');
+}
+
+async function triggerProjectExcelUpload() {
+  await openExcelFilePicker(processProjectExcelFile, 'projectExcelInput');
 }
 
 function loadProjectExcelArrayBuffer(arrayBuffer) {
@@ -5714,9 +6232,21 @@ function loadEditableProjectExcelWorkbook(workbook) {
 
   const nodeByPageAndId = new Map();
   const nodeByPageAndRef = new Map();
+  const isEn = typeof DiagramWeaveI18n !== 'undefined' && DiagramWeaveI18n.getLocale() === 'en';
+  const skippedNodes = [];
+  const skippedConnections = [];
   nodeRows.forEach((row, index) => {
-    const pageId = sanitizeExcelText(row['页面ID'], 80) || fallbackPage.id;
-    const page = pageById.get(pageId) || fallbackPage;
+    const rawPageId = sanitizeExcelText(row['页面ID'], 80);
+    if (rawPageId && !pageById.has(rawPageId)) {
+      skippedNodes.push({
+        row: index + 2,
+        reason: isEn
+          ? `Node sheet row ${index + 2}: Page ID "${rawPageId}" does not exist; skipped.`
+          : `节点表第 ${index + 2} 行：页面ID「${rawPageId}」不存在，已跳过`,
+      });
+      return;
+    }
+    const page = rawPageId ? pageById.get(rawPageId) : fallbackPage;
     const refId = parseExcelNumber(row['编号'], index + 1);
     const nodeId = sanitizeExcelText(row['节点ID'] || `${page.id}_node_${refId}`, 80);
     const node = {
@@ -5744,22 +6274,48 @@ function loadEditableProjectExcelWorkbook(workbook) {
   });
 
   connRows.forEach((row, index) => {
-    const pageId = sanitizeExcelText(row['页面ID'], 80) || fallbackPage.id;
-    const page = pageById.get(pageId) || fallbackPage;
+    const rawPageId = sanitizeExcelText(row['页面ID'], 80);
+    if (rawPageId && !pageById.has(rawPageId)) {
+      skippedConnections.push({
+        row: index + 2,
+        reason: isEn
+          ? `Connection sheet row ${index + 2}: Page ID "${rawPageId}" does not exist; skipped.`
+          : `连线表第 ${index + 2} 行：页面ID「${rawPageId}」不存在，已跳过`,
+      });
+      return;
+    }
+    const page = rawPageId ? pageById.get(rawPageId) : fallbackPage;
     const fromId = sanitizeExcelText(row['起点节点ID'], 80);
     const toId = sanitizeExcelText(row['终点节点ID'], 80);
     const fromRef = parseExcelNumber(row['起点编号'], NaN);
     const toRef = parseExcelNumber(row['终点编号'], NaN);
     const fromNode = nodeByPageAndId.get(`${page.id}::${fromId}`) || nodeByPageAndRef.get(`${page.id}::${fromRef}`);
     const toNode = nodeByPageAndId.get(`${page.id}::${toId}`) || nodeByPageAndRef.get(`${page.id}::${toRef}`);
-    if (!fromNode || !toNode) return;
-    const labelPos = row['标签位置'] === '' ? undefined : parseExcelNumber(row['标签位置'], undefined);
+    if (!fromNode || !toNode) {
+      const missing = [];
+      if (!fromNode) {
+        const label = fromId || (Number.isFinite(fromRef) ? fromRef : '');
+        missing.push(isEn ? `start node "${label || 'blank'}"` : `起点「${label || '空白'}」`);
+      }
+      if (!toNode) {
+        const label = toId || (Number.isFinite(toRef) ? toRef : '');
+        missing.push(isEn ? `end node "${label || 'blank'}"` : `终点「${label || '空白'}」`);
+      }
+      skippedConnections.push({
+        row: index + 2,
+        reason: isEn
+          ? `Connection sheet row ${index + 2}: ${missing.join(' and ')} was not found; skipped.`
+          : `连线表第 ${index + 2} 行：${missing.join('和')}找不到，已跳过`,
+      });
+      return;
+    }
+    const labelPos = parseExcelLabelPos(row['标签位置']);
     const conn = {
       id: sanitizeExcelText(row['连线ID'] || `${page.id}_conn_${index + 1}`, 80),
       from: fromNode.id,
-      fromPort: sanitizeExcelText(row['起点端口'] || 'bottom', 16),
+      fromPort: normalizePortName(row['起点端口'], 'bottom'),
       to: toNode.id,
-      toPort: sanitizeExcelText(row['终点端口'] || 'top', 16),
+      toPort: normalizePortName(row['终点端口'], 'top'),
       label: sanitizeExcelText(row['条件'], MAX_EXCEL_LABEL_LENGTH),
     };
     if (labelPos !== undefined) conn.labelPos = labelPos;
@@ -5778,42 +6334,137 @@ function loadEditableProjectExcelWorkbook(workbook) {
     connRouteMode: sanitizeExcelText(project['连线模式'] || state.connRouteMode, 32),
   };
 
-  return loadFlowDocumentPayload(doc);
-}
-
-function handleExcelLoad(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (typeof XLSX === 'undefined') {
-    showToast('Excel 库未加载，请确认 vendor 目录完整');
-    e.target.value = '';
-    return;
-  }
-  processExcelFile(file);
-  e.target.value = '';
-}
-
-function processExcelFile(file) {
-  if (file.size > MAX_EXCEL_FILE_BYTES) {
-    showToast(`Excel 文件过大，最大允许 5MB`);
-    return;
-  }
-
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data = new Uint8Array(ev.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      importExcelWorkbookData(workbook);
-    } catch (err) {
-      showToast('Excel 解析失败：' + err.message);
+  const loaded = loadFlowDocumentPayload(doc);
+  if (loaded) {
+    projectSession.lastExcelImportDiagnostics = {
+      skippedNodes,
+      skippedConnections,
+      referenceConnections: [],
+    };
+    const skippedTotal = skippedNodes.length + skippedConnections.length;
+    if (skippedTotal) {
+      const issueSummary = [...skippedNodes, ...skippedConnections]
+        .slice(0, 3)
+        .map(item => item.reason)
+        .join(isEn ? '; ' : '；');
+      const message = isEn
+        ? `Imported editable Excel project; skipped ${skippedTotal} invalid row(s): ${issueSummary}`
+        : `已导入完整 Excel 工作文件；已跳过 ${skippedTotal} 行问题数据：${issueSummary}`;
+      setExcelImportStatus(message, 'success');
+      showToast(message);
     }
-  };
-  reader.readAsArrayBuffer(file);
+  }
+  return loaded;
+}
+
+async function openExcelFilePicker(processFile, inputId) {
+  if (typeof window.showOpenFilePicker === 'function') {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        multiple: false,
+        types: getExcelOpenPickerTypes(),
+      });
+      if (!handle) return;
+      await processFile(await handle.getFile());
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        clearExcelImportStatus();
+      } else {
+        reportExcelImportError('打开文件失败：' + (err?.message || err));
+      }
+      return;
+    }
+  }
+
+  const input = document.getElementById(inputId);
+  if (!input) {
+    reportExcelImportError('浏览器不支持文件选择');
+    return;
+  }
+  if (typeof input.showPicker === 'function') {
+    try {
+      input.showPicker();
+      return;
+    } catch {
+      // Keep the legacy path for browsers that expose showPicker but reject it.
+    }
+  }
+  input.click();
+}
+
+async function handleProjectExcelLoad(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) {
+    clearExcelImportStatus();
+    return;
+  }
+  await processProjectExcelFile(file);
+}
+
+async function processProjectExcelFile(file) {
+  if (typeof XLSX === 'undefined') {
+    reportExcelImportError('Excel 库未加载，请确认 vendor 目录完整');
+    return false;
+  }
+  if (file.size > MAX_EXCEL_FILE_BYTES) {
+    reportExcelImportError('Excel 文件过大，最大允许 5MB');
+    return false;
+  }
+  await showExcelImportWorking();
+  try {
+    const loaded = loadProjectExcelArrayBuffer(await file.arrayBuffer());
+    if (loaded) {
+      projectSession.fileHandle = null;
+      projectSession.fileFormat = 'excel';
+      hideExcelDataDialog();
+      return true;
+    }
+    reportExcelImportError('Excel 工作文件导入失败，请检查文件格式');
+    return false;
+  } catch (err) {
+    reportExcelImportError('Excel 工作文件解析失败：' + (err?.message || err));
+    return false;
+  }
+}
+
+async function handleExcelLoad(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) {
+    clearExcelImportStatus();
+    return;
+  }
+  await processExcelFile(file);
+}
+
+async function processExcelFile(file) {
+  if (typeof XLSX === 'undefined') {
+    reportExcelImportError('Excel 库未加载，请确认 vendor 目录完整');
+    return false;
+  }
+  if (file.size > MAX_EXCEL_FILE_BYTES) {
+    reportExcelImportError('Excel 文件过大，最大允许 5MB');
+    return false;
+  }
+  await showExcelImportWorking();
+  try {
+    const workbook = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+    const loaded = importExcelWorkbookData(workbook);
+    if (loaded) {
+      return true;
+    }
+    setExcelImportStatus('Excel 数据导入失败，请检查列名与内容', 'error');
+    return false;
+  } catch (err) {
+    reportExcelImportError('Excel 解析失败：' + (err?.message || err));
+    return false;
+  }
 }
 
 function importExcelWorkbookData(workbook) {
+  projectSession.lastExcelImportDiagnostics = null;
   const nodeSheetName = workbook.SheetNames.find(n => n.includes('节点')) || workbook.SheetNames[0];
   const connSheetName = workbook.SheetNames.find(n => n.includes('连线')) || workbook.SheetNames[1];
   const nodeData = XLSX.utils.sheet_to_json(workbook.Sheets[nodeSheetName]);
@@ -5843,6 +6494,12 @@ function importExcelWorkbookData(workbook) {
       label: parsed.label,
       role: parsed.role,
       shape: parsed.shape,
+      x: parsed.x,
+      y: parsed.y,
+      w: parsed.w,
+      h: parsed.h,
+      fillColor: parsed.fillColor,
+      strokeColor: parsed.strokeColor,
       detail: parsed.detail,
       duration: parsed.duration,
       lane: parsed.lane,
@@ -5852,14 +6509,18 @@ function importExcelWorkbookData(workbook) {
   });
 
   const connRows = [];
-  connData.forEach(row => {
+  connData.forEach((row, index) => {
     const from = parseInt(pickExcelField(row, ['起点编号', 'from', '起始', 'source']), 10);
     const to = parseInt(pickExcelField(row, ['终点编号', 'to', '目标', 'target']), 10);
     if (isNaN(from) || isNaN(to)) return;
     connRows.push({
       from,
       to,
+      sourceRow: index + 2,
       label: sanitizeExcelText(pickExcelField(row, ['条件', 'label', '标签']) || '', MAX_EXCEL_LABEL_LENGTH),
+      fromPort: normalizePortName(pickExcelField(row, ['起点端口', 'fromPort', 'sourcePort']), 'bottom'),
+      toPort: normalizePortName(pickExcelField(row, ['终点端口', 'toPort', 'targetPort']), 'top'),
+      labelPos: parseExcelLabelPos(pickExcelField(row, ['标签位置', 'labelPos'])),
     });
   });
 
@@ -5868,9 +6529,30 @@ function importExcelWorkbookData(workbook) {
     return false;
   }
 
-  applyFlowData(nodeRows, connRows, false);
-  hideExcelDataDialog();
-  showToast(`已从 Excel 数据表导入 ${state.nodes.length} 个节点，${state.connections.length} 条连线`);
+  const prepared = prepareFlowImportData(nodeRows, connRows, { reportCycleConnections: false });
+  projectSession.lastExcelImportDiagnostics = {
+    skippedConnections: prepared.skippedConnections,
+    referenceConnections: [],
+  };
+
+  applyFlowData(prepared.nodeRows, prepared.connRows, false);
+  if (prepared.skippedConnections.length > 0) {
+    const issueSummary = [
+      ...prepared.skippedConnections,
+    ]
+      .slice(0, 3)
+      .map(item => item.reason)
+      .join('；');
+    const statusParts = [];
+    if (prepared.skippedConnections.length > 0) {
+      statusParts.push(`跳过 ${prepared.skippedConnections.length} 条无法落图连线`);
+    }
+    showToast(`已导入 ${state.nodes.length} 个节点、${state.connections.length} 条连线；${statusParts.join('；')}`);
+    setExcelImportStatus(`已按文档导入。${statusParts.join('；')}：${issueSummary}`, 'success');
+  } else {
+    hideExcelDataDialog();
+    showToast(`已从 Excel 数据表导入 ${state.nodes.length} 个节点，${state.connections.length} 条连线`);
+  }
   return true;
 }
 
@@ -5973,6 +6655,7 @@ async function syncContentPackFromSettings() {
 
 // ===== 初始化 =====
 async function bootDiagramWeave() {
+  try {
   if (typeof DiagramWeaveI18n !== 'undefined') {
     await DiagramWeaveI18n.init();
     const lang = DiagramWeaveI18n.getLocale();
@@ -5984,6 +6667,7 @@ async function bootDiagramWeave() {
       refreshConnRouteLabelsFromI18n();
       rebuildConnRouteSelect();
       initShapeTypeSelect();
+      initTemplates();
       if (typeof DiagramWeave !== 'undefined') {
         DiagramWeave.renderPageTabs();
         DiagramWeave.renderLayerPanel();
@@ -5993,7 +6677,9 @@ async function bootDiagramWeave() {
   }
   if (typeof DiagramWeaveBootstrap !== 'undefined') {
     await DiagramWeaveBootstrap.ensureRuntime();
-    await DiagramWeaveBootstrap.checkRemoteUpdate();
+    if (!window.__dwSkipRemoteBootstrap) {
+      await DiagramWeaveBootstrap.checkRemoteUpdate();
+    }
     await DiagramWeaveBootstrap.loadTemplateLibrary();
   }
   if (typeof DiagramWeave !== 'undefined') DiagramWeave.mergeShapeRegistry();
@@ -6017,6 +6703,9 @@ async function bootDiagramWeave() {
     DiagramWeave.loadChineseFont();
   }
   renderAll();
+  loadE2eSeedNodesFromSession();
+  renderAll();
+  applyDeepLinkHighlight();
   setTimeout(promptInitialProjectSave, 600);
 
   if (location.protocol === 'file:' && !sessionStorage.getItem('fc-file-protocol-hint')) {
@@ -6024,6 +6713,12 @@ async function bootDiagramWeave() {
     setTimeout(() => {
       showToast(typeof t === 'function' ? t('toast.useBat') : '建议双击 bat 启动');
     }, 800);
+  }
+  } catch (bootError) {
+    console.error('[DiagramWeave] boot error', bootError);
+    try { renderAll(); } catch { /* ignore */ }
+  } finally {
+    window.__dwEditorReady = true;
   }
 }
 bootDiagramWeave();

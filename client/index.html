@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DiagramWeave Hub</title>
+  <link rel="stylesheet" href="/client/hub-shell.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">VisualProjectManagement child subsystem</p>
+        <h1>DiagramWeave-Public</h1>
+      </div>
+      <a class="primary-action" href="/flowchart-editor.html">Open Editor</a>
+    </header>
+
+    <section class="status-row" aria-label="Subsystem status">
+      <div>
+        <span class="label">Runtime</span>
+        <strong id="runtime-status">checking</strong>
+      </div>
+      <div>
+        <span class="label">Architecture</span>
+        <strong id="architecture">miniapp-hub-child</strong>
+      </div>
+      <div>
+        <span class="label">Port</span>
+        <strong id="runtime-port">4273</strong>
+      </div>
+    </section>
+
+    <section>
+      <h2>Subsystems</h2>
+      <div id="subsystems" class="subsystems" aria-live="polite"></div>
+    </section>
+  </main>
+  <script src="/client/hub-shell.js" type="module"></script>
+</body>
+</html>

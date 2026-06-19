@@ -485,6 +485,16 @@
   .connection-line {
     pointer-events: none;
     cursor: pointer;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .connection-bridge,
+  .connection-bridge-gap {
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .conn-handle-node {
@@ -569,7 +579,7 @@
 
   .node-label {
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-primary);
     text-align: center;
     padding: 4px 12px;
@@ -580,6 +590,8 @@
     text-overflow: ellipsis;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.28);
     will-change: transform;
     transform-origin: center center;
   }
@@ -1333,16 +1345,67 @@
   /* ===== 演示模式 - 左侧步骤放大预览 ===== */
   .present-zoom-dock {
     display: none;
-    width: 220px;
+    width: 100%;
     flex-shrink: 0;
     flex-direction: column;
     background: var(--bg-secondary);
-    border-right: 1px solid var(--border);
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
     overflow: hidden;
   }
 
   .presentation-mode .present-zoom-dock {
     display: flex;
+    width: 100%;
+    max-height: none;
+  }
+
+  .present-zoom-summary {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .present-summary-title {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .present-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .present-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .present-summary-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .present-summary-value {
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.45;
+    word-break: break-all;
+  }
+
+  .present-summary-value,
+  .present-zoom-lens-label {
+    font-weight: 600;
   }
 
   .present-zoom-dock-header {
@@ -1352,11 +1415,11 @@
   }
 
   .present-zoom-dock-body {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px 12px 24px;
+    padding: 12px 12px 16px;
     overflow-y: auto;
   }
 
@@ -1474,16 +1537,19 @@
   .present-sidebar {
     display: none;
     flex-direction: column;
-    width: 300px;
+    width: 360px;
     flex-shrink: 0;
     background: var(--bg-secondary);
-    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-left: 0;
     overflow-y: auto;
     z-index: 60;
   }
 
   .presentation-mode .present-sidebar {
     display: flex;
+    width: clamp(320px, 34vw, 430px);
+    overflow: auto;
   }
 
   .presentation-mode .properties-panel {
@@ -1587,6 +1653,7 @@
   .presentation-mode .canvas-wrapper {
     flex: 1;
     min-width: 0;
+    align-self: stretch;
   }
 
   .presentation-mode .main-layout {
@@ -1597,6 +1664,21 @@
     bottom: 0;
     height: auto;
     overflow: hidden;
+    display: flex;
+  }
+
+  .presentation-mode .sidebar {
+    display: none;
+  }
+
+  .presentation-mode .present-zoom-dock {
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .presentation-mode .present-sidebar {
+    border-top: none;
+    overflow: auto;
   }
 
   .presentation-mode .text-editor-panel {
@@ -1918,6 +2000,16 @@
     background: var(--accent-dim); border-color: var(--accent); color: var(--accent);
   }
   .excel-data-actions button:hover { border-color: var(--border-light); }
+  .excel-import-status {
+    margin: 12px 0 10px;
+    min-height: 20px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .excel-import-status.is-working { color: var(--accent); }
+  .excel-import-status.is-error { color: var(--danger); }
+  .excel-import-status.is-success { color: var(--success); }
   .export-format-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

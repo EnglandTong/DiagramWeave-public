@@ -1,0 +1,122 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #1f2937;
+  background: #f7f7f4;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #d8d6cf;
+  padding-bottom: 24px;
+}
+
+.eyebrow,
+.label {
+  margin: 0;
+  color: #697078;
+  font-size: 13px;
+}
+
+h1 {
+  margin: 4px 0 0;
+  font-size: 34px;
+  font-weight: 700;
+}
+
+h2 {
+  margin-top: 32px;
+  font-size: 22px;
+}
+
+.primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #174ea6;
+  border-radius: 6px;
+  background: #1d4ed8;
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.status-row,
+.subsystems {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.status-row > div,
+.subsystem-card {
+  border: 1px solid #d8d6cf;
+  border-radius: 8px;
+  background: #fff;
+  padding: 16px;
+}
+
+.status-row strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.subsystem-card h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.subsystem-card p {
+  margin: 0 0 12px;
+  color: #4b5563;
+}
+
+.capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.capabilities span {
+  border: 1px solid #d8d6cf;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #374151;
+  font-size: 12px;
+}
+
+.secondary-action {
+  color: #174ea6;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .topbar,
+  .status-row,
+  .subsystems {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

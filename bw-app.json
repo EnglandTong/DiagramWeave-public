@@ -1,0 +1,18 @@
+{
+  "id": "diagramweave-public",
+  "title": "DiagramWeave Public",
+  "description": "Standalone flowchart editor and content-pack based diagram workspace.",
+  "type": "node",
+  "cwd": "../DiagramWeave-Public",
+  "startCommand": "corepack pnpm serve",
+  "defaultPort": 5175,
+  "portRange": [5175, 5199],
+  "portEnv": "PORT",
+  "urlTemplate": "http://{host}:{port}",
+  "healthPath": "/api/health",
+  "enabled": true,
+  "icon": "diagram",
+  "dependencies": [],
+  "dataProviders": ["flowchart-templates"],
+  "dataConsumers": []
+}

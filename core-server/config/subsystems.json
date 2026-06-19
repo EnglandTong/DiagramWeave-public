@@ -1,0 +1,10 @@
+{
+  "subsystems": [
+    {
+      "id": "diagramweave-editor",
+      "manifest": "../../subsystems/diagramweave-editor.manifest.json",
+      "enabled": true,
+      "defaultPort": 4273
+    }
+  ]
+}
