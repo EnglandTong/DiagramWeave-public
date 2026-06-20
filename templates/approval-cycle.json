@@ -1,0 +1,24 @@
+{
+  "name": "审批回路流程",
+  "nameEn": "Approval With Rework Loop",
+  "description": "包含退回修改的循环审批流程，适合测试回路导入和连线端口。",
+  "descriptionEn": "Approval process with a rework loop. Useful for validating loops and fixed connection ports.",
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "nodes": [
+    { "shape": "start", "label": "提交", "x": 80, "y": 220, "detail": "申请人提交资料", "role": "申请人" },
+    { "shape": "rectangle", "label": "资料初审", "x": 240, "y": 210, "detail": "检查资料完整性", "role": "助理" },
+    { "shape": "diamond", "label": "资料完整？", "x": 430, "y": 200, "detail": "判断是否需要补件", "role": "助理" },
+    { "shape": "rectangle", "label": "补充资料", "x": 430, "y": 360, "detail": "退回申请人补件", "role": "申请人" },
+    { "shape": "rectangle", "label": "经理审批", "x": 650, "y": 210, "detail": "经理完成业务审批", "role": "经理" },
+    { "shape": "end", "label": "归档", "x": 850, "y": 220, "detail": "审批结果归档" }
+  ],
+  "connections": [
+    { "fromIndex": 0, "fromPort": "right", "toIndex": 1, "toPort": "left" },
+    { "fromIndex": 1, "fromPort": "right", "toIndex": 2, "toPort": "left" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 4, "toPort": "left", "label": "是" },
+    { "fromIndex": 2, "fromPort": "bottom", "toIndex": 3, "toPort": "top", "label": "否" },
+    { "fromIndex": 3, "fromPort": "left", "toIndex": 1, "toPort": "bottom", "label": "补齐后返回" },
+    { "fromIndex": 4, "fromPort": "right", "toIndex": 5, "toPort": "left" }
+  ]
+}

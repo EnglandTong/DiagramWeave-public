@@ -14,6 +14,8 @@ const browserJsFiles = [
   'diagramweave-i18n.js',
   'diagramweave-content-pack.js',
   'flowchart-export-shapes.js',
+  'diagramweave-extension-kernel.js',
+  'diagramweave-visio-preview.js',
   'flowchart-extensions.js',
   'flowchart-editor.js',
 ];

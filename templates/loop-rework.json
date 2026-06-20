@@ -1,0 +1,22 @@
+{
+  "name": "循环返工流程",
+  "nameEn": "Looping Rework Flow",
+  "description": "演示循环流程不会被系统拆解，适合导入测试和路径展示。",
+  "descriptionEn": "Shows a true loop that should stay user-defined, useful for import and route tests.",
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "nodes": [
+    { "shape": "start", "label": "开始", "x": 80, "y": 180 },
+    { "shape": "rectangle", "label": "执行任务", "x": 250, "y": 170, "detail": "完成当前任务" },
+    { "shape": "diamond", "label": "验收通过？", "x": 470, "y": 160, "detail": "检查是否满足标准" },
+    { "shape": "rectangle", "label": "返工修正", "x": 250, "y": 350, "detail": "根据问题修正后回到执行" },
+    { "shape": "end", "label": "完成", "x": 700, "y": 180 }
+  ],
+  "connections": [
+    { "fromIndex": 0, "fromPort": "right", "toIndex": 1, "toPort": "left" },
+    { "fromIndex": 1, "fromPort": "right", "toIndex": 2, "toPort": "left" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 4, "toPort": "left", "label": "是" },
+    { "fromIndex": 2, "fromPort": "bottom", "toIndex": 3, "toPort": "right", "label": "否" },
+    { "fromIndex": 3, "fromPort": "left", "toIndex": 1, "toPort": "bottom", "label": "返工后重试" }
+  ]
+}

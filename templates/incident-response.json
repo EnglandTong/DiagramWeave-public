@@ -1,0 +1,26 @@
+{
+  "name": "事件响应流程",
+  "nameEn": "Incident Response",
+  "description": "从告警到复盘的事件处理流程，包含升级和回溯节点。",
+  "descriptionEn": "Incident workflow from alert to postmortem, including escalation and feedback.",
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "nodes": [
+    { "shape": "start", "label": "告警触发", "x": 80, "y": 240, "detail": "监控或用户反馈触发事件" },
+    { "shape": "rectangle", "label": "分级确认", "x": 250, "y": 230, "detail": "确认影响范围和优先级" },
+    { "shape": "diamond", "label": "重大事件？", "x": 450, "y": 220, "detail": "判断是否需要升级" },
+    { "shape": "rectangle", "label": "升级协调", "x": 450, "y": 80, "detail": "通知负责人和相关团队" },
+    { "shape": "rectangle", "label": "修复处置", "x": 650, "y": 230, "detail": "执行止血、回滚或修复" },
+    { "shape": "rectangle", "label": "验证恢复", "x": 850, "y": 230, "detail": "确认服务恢复且指标正常" },
+    { "shape": "document", "label": "复盘记录", "x": 1050, "y": 230, "detail": "记录根因、行动项和负责人" }
+  ],
+  "connections": [
+    { "fromIndex": 0, "fromPort": "right", "toIndex": 1, "toPort": "left" },
+    { "fromIndex": 1, "fromPort": "right", "toIndex": 2, "toPort": "left" },
+    { "fromIndex": 2, "fromPort": "top", "toIndex": 3, "toPort": "bottom", "label": "是" },
+    { "fromIndex": 3, "fromPort": "right", "toIndex": 4, "toPort": "top", "label": "协调后" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 4, "toPort": "left", "label": "否" },
+    { "fromIndex": 4, "fromPort": "right", "toIndex": 5, "toPort": "left" },
+    { "fromIndex": 5, "fromPort": "right", "toIndex": 6, "toPort": "left" }
+  ]
+}

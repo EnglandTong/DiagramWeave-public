@@ -1,0 +1,33 @@
+{
+  "id": "diagramweave-editor",
+  "name": "DiagramWeave Editor",
+  "kind": "visual-diagramming-editor",
+  "version": "1.0.0",
+  "path": ".",
+  "status": "active",
+  "entry": {
+    "type": "web",
+    "localPath": "/flowchart-editor.html",
+    "localUrl": "http://127.0.0.1:4273/flowchart-editor.html",
+    "healthUrl": "http://127.0.0.1:4273/api/health"
+  },
+  "capabilities": [
+    "standalone",
+    "diagram-editor",
+    "templates",
+    "import-export",
+    "routing",
+    "content-pack"
+  ],
+  "data": {
+    "storage": "browser-local",
+    "backupPaths": []
+  },
+  "verification": {
+    "commands": [
+      "npm.cmd run typecheck",
+      "npm.cmd test",
+      "npm.cmd run test:e2e"
+    ]
+  }
+}

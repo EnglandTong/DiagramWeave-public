@@ -44,6 +44,39 @@ function safePath(urlPath) {
 }
 
 const server = http.createServer((req, res) => {
+  const requestPath = (req.url || '/').split('?')[0];
+  if (requestPath === '/api/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      status: 'ok',
+      system: 'diagramweave-public',
+      version: '1.0.0',
+      time: new Date().toISOString(),
+    }));
+    return;
+  }
+  if (requestPath === '/api/system/info') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      id: 'diagramweave-public',
+      title: 'DiagramWeave Public',
+      version: '1.0.0',
+      environment: 'local',
+      dataProviders: ['flowchart-templates'],
+      dataConsumers: [],
+    }));
+    return;
+  }
+  if (requestPath === '/api/system/capabilities') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({
+      providers: ['flowchart-templates'],
+      consumers: [],
+      features: ['flowchart-editor', 'template-library', 'local-export'],
+    }));
+    return;
+  }
+
   const filePath = safePath(req.url || '/');
   if (!filePath) {
     res.writeHead(403);
@@ -68,6 +101,20 @@ server.listen(PORT, HOST, () => {
   console.log(`DiagramWeave: ${url}`);
   console.log('Press Ctrl+C to stop');
 });
+
+function shutdown(signal) {
+  console.log(`DiagramWeave serve shutting down (${signal || 'signal'})`);
+  if (typeof server.closeAllConnections === 'function') {
+    server.closeAllConnections();
+  }
+  server.close(() => {
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), 1000).unref();
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 server.on('error', (err) => {
   if (err?.code === 'EADDRINUSE') {

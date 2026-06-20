@@ -1,0 +1,28 @@
+{
+  "name": "发布流水线",
+  "nameEn": "Release Pipeline",
+  "description": "从开发到上线的全链路流水线，右侧展示 full track 时可直接演示。",
+  "descriptionEn": "End-to-end release pipeline from development to production.",
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "nodes": [
+    { "shape": "start", "label": "需求就绪", "x": 70, "y": 220, "role": "产品" },
+    { "shape": "rectangle", "label": "开发", "x": 230, "y": 210, "role": "工程" },
+    { "shape": "rectangle", "label": "代码评审", "x": 420, "y": 210, "role": "工程" },
+    { "shape": "rectangle", "label": "自动测试", "x": 620, "y": 210, "role": "CI" },
+    { "shape": "diamond", "label": "测试通过？", "x": 820, "y": 200, "role": "QA" },
+    { "shape": "rectangle", "label": "修复缺陷", "x": 620, "y": 360, "role": "工程" },
+    { "shape": "rectangle", "label": "灰度发布", "x": 1040, "y": 210, "role": "运维" },
+    { "shape": "end", "label": "正式上线", "x": 1260, "y": 220, "role": "运维" }
+  ],
+  "connections": [
+    { "fromIndex": 0, "fromPort": "right", "toIndex": 1, "toPort": "left" },
+    { "fromIndex": 1, "fromPort": "right", "toIndex": 2, "toPort": "left" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 3, "toPort": "left" },
+    { "fromIndex": 3, "fromPort": "right", "toIndex": 4, "toPort": "left" },
+    { "fromIndex": 4, "fromPort": "right", "toIndex": 6, "toPort": "left", "label": "是" },
+    { "fromIndex": 4, "fromPort": "bottom", "toIndex": 5, "toPort": "right", "label": "否" },
+    { "fromIndex": 5, "fromPort": "left", "toIndex": 2, "toPort": "bottom", "label": "修复后复审" },
+    { "fromIndex": 6, "fromPort": "right", "toIndex": 7, "toPort": "left" }
+  ]
+}

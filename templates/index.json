@@ -1,5 +1,11 @@
 {
   "templates": [
-    "starter-vertical.json"
+    "starter-vertical.json",
+    "approval-cycle.json",
+    "swimlane-handoff.json",
+    "fishbone-root-cause.json",
+    "incident-response.json",
+    "loop-rework.json",
+    "release-pipeline.json"
   ]
 }

@@ -166,10 +166,24 @@ The content pack only updates icons, fonts, and connection mode configuration. I
 ### Development
 
 ```bash
+pnpm hub         # MiniApp Hub-style shell on http://127.0.0.1:4273/
 pnpm typecheck   # JavaScript syntax check
 pnpm test        # Unit tests for sanitizer, export shapes, etc.
 pnpm test:e2e    # Browser smoke tests; first run may require pnpm exec playwright install chromium
 ```
+
+### MiniApp Hub Architecture
+
+DiagramWeave-Public now exposes a MiniApp Hub-compatible child-system shape while keeping the original editor entry point intact:
+
+| Path | Purpose |
+|---|---|
+| `core-server/` | Local hub server, health endpoints, subsystem registry, and static launcher |
+| `client/` | Lightweight hub shell that launches the editor and reads hub APIs |
+| `shared/` | Runtime manifest helpers and validation |
+| `subsystems/` | Subsystem manifest records consumed by parent launchers |
+
+Run `pnpm hub` to open the hub shell at `http://127.0.0.1:4273/`. The legacy editor remains available at `/flowchart-editor.html` and through `pnpm serve`.
 
 ### Add Flow Templates (Optional)
 

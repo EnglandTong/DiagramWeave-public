@@ -1,0 +1,25 @@
+{
+  "name": "鱼骨根因分析",
+  "nameEn": "Fishbone Root Cause",
+  "description": "人、机、料、法、环五类原因汇入问题主干，所有分支均可移动调整。",
+  "descriptionEn": "People, machine, material, method, and environment causes feed into the problem spine.",
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "nodes": [
+    { "shape": "hexagon", "label": "目标问题", "x": 760, "y": 270, "w": 150, "h": 80, "detail": "需要分析的质量、效率或风险问题" },
+    { "shape": "rectangle", "label": "人员", "x": 120, "y": 80, "detail": "技能、培训、职责、排班" },
+    { "shape": "rectangle", "label": "设备", "x": 120, "y": 190, "detail": "机器、工具、系统稳定性" },
+    { "shape": "rectangle", "label": "材料", "x": 120, "y": 350, "detail": "输入材料、数据、供应质量" },
+    { "shape": "rectangle", "label": "方法", "x": 120, "y": 460, "detail": "流程、标准、检查机制" },
+    { "shape": "rectangle", "label": "环境", "x": 390, "y": 540, "detail": "现场、组织、外部限制" },
+    { "shape": "circle", "label": "主干", "x": 520, "y": 295, "w": 44, "h": 44, "detail": "原因汇入点" }
+  ],
+  "connections": [
+    { "fromIndex": 1, "fromPort": "right", "toIndex": 6, "toPort": "top", "label": "人员因素" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 6, "toPort": "left", "label": "设备因素" },
+    { "fromIndex": 3, "fromPort": "right", "toIndex": 6, "toPort": "bottom", "label": "材料因素" },
+    { "fromIndex": 4, "fromPort": "right", "toIndex": 6, "toPort": "bottom", "label": "方法因素" },
+    { "fromIndex": 5, "fromPort": "top", "toIndex": 6, "toPort": "right", "label": "环境因素" },
+    { "fromIndex": 6, "fromPort": "right", "toIndex": 0, "toPort": "left", "label": "汇总" }
+  ]
+}

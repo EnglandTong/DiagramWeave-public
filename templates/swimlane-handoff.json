@@ -1,0 +1,29 @@
+{
+  "name": "横向泳道交接",
+  "nameEn": "Horizontal Swimlane Handoff",
+  "description": "三角色横向泳道，保留坐标与端口，可直接调整每个动作。",
+  "descriptionEn": "Three-role horizontal swimlane. Coordinates and ports are preserved for direct editing.",
+  "type": "swimlane",
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "swimlanes": ["客户", "客服", "技术"],
+  "laneSpacing": 220,
+  "startX": 80,
+  "startY": 50,
+  "nodes": [
+    { "shape": "start", "label": "提出需求", "x": 120, "y": 90, "lane": 0, "role": "客户", "detail": "客户提交需求或问题" },
+    { "shape": "rectangle", "label": "登记工单", "x": 330, "y": 210, "lane": 1, "role": "客服", "detail": "客服记录并确认信息" },
+    { "shape": "diamond", "label": "需要技术？", "x": 340, "y": 340, "lane": 1, "role": "客服", "detail": "判断是否需要技术支持" },
+    { "shape": "rectangle", "label": "技术处理", "x": 550, "y": 460, "lane": 2, "role": "技术", "detail": "技术定位并处理问题" },
+    { "shape": "rectangle", "label": "客户确认", "x": 120, "y": 600, "lane": 0, "role": "客户", "detail": "客户确认结果" },
+    { "shape": "end", "label": "关闭工单", "x": 340, "y": 720, "lane": 1, "role": "客服", "detail": "客服关闭工单" }
+  ],
+  "connections": [
+    { "fromIndex": 0, "fromPort": "bottom", "toIndex": 1, "toPort": "top" },
+    { "fromIndex": 1, "fromPort": "bottom", "toIndex": 2, "toPort": "top" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 3, "toPort": "top", "label": "是" },
+    { "fromIndex": 3, "fromPort": "left", "toIndex": 4, "toPort": "right" },
+    { "fromIndex": 2, "fromPort": "bottom", "toIndex": 4, "toPort": "top", "label": "否" },
+    { "fromIndex": 4, "fromPort": "right", "toIndex": 5, "toPort": "left" }
+  ]
+}
