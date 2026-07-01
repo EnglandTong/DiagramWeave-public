@@ -5,65 +5,70 @@
   }
 
   :root {
-    --bg-primary: #0f1117;
-    --bg-secondary: #181a22;
-    --bg-tertiary: #1e2029;
-    --bg-hover: #252733;
-    --bg-active: #2a2d3a;
-    --border: #2d3044;
-    --border-light: #3a3e55;
-    --text-primary: #e8eaf0;
-    --text-secondary: #9498ad;
-    --text-muted: #6b6f85;
-    --accent: #6c8cff;
-    --accent-hover: #8aa4ff;
-    --accent-dim: rgba(108, 140, 255, 0.15);
-    --danger: #ff6b6b;
-    --success: #4ecdc4;
-    --warning: #ffd93d;
-    --canvas-bg: #13151d;
-    --canvas-grid: rgba(255,255,255,0.03);
+    --bg-canvas: #0c0e14;
+    --bg-base: #111320;
+    --bg-surface: #161828;
+    --bg-elevated: #1c1f32;
+    --bg-hover: #232740;
+    --bg-active: #2a2e48;
+    --bg-code: #1a1d2e;
+    --accent: #7c6aff;
+    --accent-hover: #9488ff;
+    --accent-dim: rgba(124, 106, 255, 0.12);
+    --accent-glow: rgba(124, 106, 255, 0.25);
+    --accent-surface: rgba(124, 106, 255, 0.06);
+    --accent-secondary: #38bdf8;
+    --accent-secondary-dim: rgba(56, 189, 248, 0.12);
+    --status-success: #34d399;
+    --status-success-dim: rgba(52, 211, 153, 0.12);
+    --status-warning: #fbbf24;
+    --status-warning-dim: rgba(251, 191, 36, 0.12);
+    --status-danger: #f87171;
+    --status-danger-dim: rgba(248, 113, 113, 0.12);
+    --status-info: #60a5fa;
+    --status-info-dim: rgba(96, 165, 250, 0.12);
+    --text-primary: #e8eaf2;
+    --text-secondary: #9498b4;
+    --text-muted: #5e6280;
+    --text-on-accent: #ffffff;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-light: rgba(255, 255, 255, 0.12);
+    --border-focus: var(--accent);
+    --divider: rgba(255, 255, 255, 0.04);
+    --bg-primary: var(--bg-base);
+    --bg-secondary: var(--bg-surface);
+    --bg-tertiary: var(--bg-elevated);
+    --danger: var(--status-danger);
+    --success: var(--status-success);
+    --warning: var(--status-warning);
+    --canvas-bg: var(--bg-canvas);
+    --canvas-grid: rgba(255,255,255,0.04);
     --canvas-grid-major: rgba(255,255,255,0.06);
-    --node-fill-default: #1e2029;
-    --node-stroke-default: #5b6b8a;
-    --conn-color: #6b6f85;
+    --node-fill-default: var(--bg-elevated);
+    --node-stroke-default: var(--accent-secondary);
+    --conn-color: var(--text-muted);
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
     --shadow-lg: 0 8px 30px rgba(0,0,0,0.5);
+    --shadow-glow: 0 0 20px rgba(124, 106, 255, 0.15);
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 14px;
+    --radius-full: 9999px;
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 20px;
+    --space-2xl: 24px;
+    --space-3xl: 32px;
+    --transition-fast: 120ms ease;
+    --transition-normal: 200ms ease;
+    --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
     --font-sans: 'DiagramWeaveZh', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
     --font-mono: 'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace;
-    --toolbar-h: 40px;
-    --page-tabs-h: 30px;
-  }
-
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg-primary: #eef0f4;
-      --bg-secondary: #ffffff;
-      --bg-tertiary: #f5f6f8;
-      --bg-hover: #e8ebf0;
-      --bg-active: #dde1e8;
-      --border: #c8ced8;
-      --border-light: #aeb6c4;
-      --text-primary: #1a1d26;
-      --text-secondary: #4a5162;
-      --text-muted: #6b7280;
-      --accent: #4a6cf7;
-      --accent-hover: #3558e0;
-      --accent-dim: rgba(74, 108, 247, 0.12);
-      --canvas-bg: #e4e7ed;
-      --canvas-grid: rgba(0,0,0,0.04);
-      --canvas-grid-major: rgba(0,0,0,0.08);
-      --node-fill-default: #ffffff;
-      --node-stroke-default: #4472c4;
-      --conn-color: #5a6270;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-      --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-      --shadow-lg: 0 8px 30px rgba(0,0,0,0.12);
-    }
+    --toolbar-h: 48px;
+    --page-tabs-h: 32px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -175,7 +180,7 @@
   }
 
   .toolbar-btn.danger:hover {
-    background: rgba(255,107,107,0.12);
+    background: var(--status-danger-dim);
     color: var(--danger);
   }
 
@@ -295,7 +300,7 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(108,140,255,0.06), transparent);
+    background: linear-gradient(135deg, var(--accent-surface), transparent);
     opacity: 0;
     transition: opacity 0.18s;
   }
@@ -847,7 +852,7 @@
     background: var(--accent);
     border-color: var(--accent);
     transform: translate(-50%, -50%) scale(1.3);
-    box-shadow: 0 0 8px rgba(108,140,255,0.5);
+    box-shadow: 0 0 8px var(--accent-glow);
   }
 
   .port.port-top { top: 0; left: 50%; }
@@ -1058,7 +1063,7 @@
   }
 
   .context-menu-item.danger:hover {
-    background: rgba(255,107,107,0.12);
+    background: var(--status-danger-dim);
     color: var(--danger);
   }
 
@@ -1129,7 +1134,7 @@
     color: var(--success);
   }
   .toolbar-btn.present-btn:hover {
-    background: rgba(78, 205, 196, 0.12);
+    background: var(--status-success-dim);
     color: var(--success);
   }
 
@@ -1194,12 +1199,12 @@
   }
 
   .present-toolbar-btn.exit-present {
-    border-color: rgba(255,107,107,0.3);
+    border-color: rgba(248, 113, 113, 0.3);
     color: var(--danger);
   }
 
   .present-toolbar-btn.exit-present:hover {
-    background: rgba(255,107,107,0.12);
+    background: var(--status-danger-dim);
   }
 
   /* ===== 演示模式 - 浮动控制条 ===== */
@@ -1245,7 +1250,7 @@
   }
 
   .present-float-btn.exit-btn:hover {
-    background: rgba(255,107,107,0.15);
+    background: var(--status-danger-dim);
     color: var(--danger);
   }
 
@@ -1273,14 +1278,14 @@
 
   /* ===== 演示模式 - 节点脉冲动画 ===== */
   @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 20px rgba(108,140,255,0.4), 0 0 40px rgba(108,140,255,0.2); }
-    50% { box-shadow: 0 0 30px rgba(108,140,255,0.6), 0 0 60px rgba(108,140,255,0.3); }
+    0%, 100% { box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(124,106,255,0.18); }
+    50% { box-shadow: 0 0 30px rgba(124,106,255,0.45), 0 0 60px var(--accent-glow); }
   }
 
   /* ===== 演示模式 - 节点高亮效果 ===== */
   .node.present-current .node-shape {
-    border-color: #6c8cff !important;
-    box-shadow: 0 0 20px rgba(108,140,255,0.4), 0 0 40px rgba(108,140,255,0.2) !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(124,106,255,0.18) !important;
     transform: scale(1.05);
     transition: all 0.4s ease;
     animation: pulse-glow 2s ease-in-out infinite;
@@ -1299,7 +1304,7 @@
 
   /* ===== 演示模式 - 连线高亮效果 ===== */
   .connection-line.present-current {
-    stroke: #6c8cff !important;
+    stroke: var(--accent) !important;
     stroke-width: 2.5 !important;
     transition: all 0.4s ease;
   }
@@ -1315,31 +1320,31 @@
   }
 
   .connection-line.present-path-in {
-    stroke: #4ecdc4 !important;
+    stroke: var(--success) !important;
     stroke-width: 2.8 !important;
     opacity: 1 !important;
-    filter: drop-shadow(0 0 6px rgba(78, 205, 196, 0.5));
+    filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5));
   }
 
   .connection-line.present-path-out {
-    stroke: #ffd93d !important;
+    stroke: var(--warning) !important;
     stroke-width: 2.8 !important;
     opacity: 1 !important;
-    filter: drop-shadow(0 0 6px rgba(255, 217, 61, 0.45));
+    filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.45));
   }
 
   .node.present-path-in-node .node-shape {
     opacity: 0.92 !important;
     filter: none !important;
-    border-color: #4ecdc4 !important;
-    box-shadow: 0 0 12px rgba(78, 205, 196, 0.35) !important;
+    border-color: var(--success) !important;
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.35) !important;
   }
 
   .node.present-path-out-node .node-shape {
     opacity: 0.92 !important;
     filter: none !important;
-    border-color: #ffd93d !important;
-    box-shadow: 0 0 12px rgba(255, 217, 61, 0.35) !important;
+    border-color: var(--warning) !important;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.35) !important;
   }
 
   /* ===== 演示模式 - 左侧步骤放大预览 ===== */
@@ -1624,13 +1629,13 @@
   }
 
   .present-path-block.in-path {
-    border-color: rgba(78, 205, 196, 0.45);
-    background: rgba(78, 205, 196, 0.08);
+    border-color: rgba(52, 211, 153, 0.45);
+    background: var(--status-success-dim);
   }
 
   .present-path-block.out-path {
-    border-color: rgba(255, 217, 61, 0.45);
-    background: rgba(255, 217, 61, 0.08);
+    border-color: rgba(251, 191, 36, 0.45);
+    background: var(--status-warning-dim);
   }
 
   .present-path-block-title {
@@ -1639,8 +1644,8 @@
     margin-bottom: 6px;
   }
 
-  .present-path-block.in-path .present-path-block-title { color: #4ecdc4; }
-  .present-path-block.out-path .present-path-block-title { color: #ffd93d; }
+  .present-path-block.in-path .present-path-block-title { color: var(--success); }
+  .present-path-block.out-path .present-path-block-title { color: var(--warning); }
 
   .present-path-list {
     margin: 0;
@@ -1976,11 +1981,11 @@
   }
   .prop-page-delete-btn {
     width: 100%; margin-top: 4px; padding: 7px 10px;
-    border: 1px solid rgba(255, 80, 80, 0.35); border-radius: var(--radius-sm);
-    background: rgba(255, 80, 80, 0.08); color: var(--danger);
+    border: 1px solid rgba(248, 113, 113, 0.35); border-radius: var(--radius-sm);
+    background: var(--status-danger-dim); color: var(--danger);
     font-family: inherit; font-size: 12px; cursor: pointer;
   }
-  .prop-page-delete-btn:hover { background: rgba(255, 80, 80, 0.16); }
+  .prop-page-delete-btn:hover { background: rgba(248, 113, 113, 0.18); }
   .excel-data-dialog { max-width: 640px; max-height: 85vh; overflow-y: auto; }
   .excel-steps { margin: 12px 0; padding-left: 20px; color: var(--text-secondary); font-size: 13px; line-height: 1.8; }
   .excel-spec-table {
@@ -2111,7 +2116,7 @@
     font-size: 15px; line-height: 1; padding: 0;
   }
   .page-tab-close:hover {
-    background: rgba(255, 80, 80, 0.12); color: var(--danger);
+    background: var(--status-danger-dim); color: var(--danger);
   }
   .page-tab-wrap.active .page-tab-close { border-left-color: var(--accent); }
   .page-tab-add {
@@ -2136,7 +2141,7 @@
     color: var(--text-muted); border-radius: 3px;
   }
   .layer-delete:hover {
-    background: rgba(255, 80, 80, 0.12); color: var(--danger);
+    background: var(--status-danger-dim); color: var(--danger);
   }
   .layer-name { flex: 1; }
   .layer-add-btn {
@@ -2147,7 +2152,7 @@
 
   .shape-cloud .node-shape { border-radius: 30px 30px 30px 8px; }
   .shape-actor .node-shape { border-radius: 40px 40px 8px 8px; }
-  .shape-note .node-shape { border-radius: 4px 12px 12px 12px; background: rgba(255,217,61,0.12) !important; }
+  .shape-note .node-shape { border-radius: 4px 12px 12px 12px; background: var(--status-warning-dim) !important; }
   .shape-offpage .node-shape {
     clip-path: polygon(0 0, 85% 0, 100% 50%, 85% 100%, 0 100%);
     border: none;

@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "DiagramWeave Design Tokens",
+  "version": "2.0.0",
+  "description": "DiagramWeave 流程图编辑器完整设计令牌系统 — 可供 AI 编码助手直接解析并应用到代码中",
+  "theme": "Dark Modern Editor",
+
+  "color": {
+    "background": {
+      "canvas":    "#0c0e14",
+      "base":      "#111320",
+      "surface":   "#161828",
+      "elevated":  "#1c1f32",
+      "hover":     "#232740",
+      "active":    "#2a2e48",
+      "code":      "#1a1d2e"
+    },
+    "accent": {
+      "primary":      "#7c6aff",
+      "primaryHover": "#9488ff",
+      "primaryDim":   "rgba(124, 106, 255, 0.12)",
+      "primaryGlow":  "rgba(124, 106, 255, 0.25)",
+      "primarySurface":"rgba(124, 106, 255, 0.06)",
+      "secondary":    "#38bdf8",
+      "secondaryDim": "rgba(56, 189, 248, 0.12)"
+    },
+    "status": {
+      "success":      "#34d399",
+      "successDim":   "rgba(52, 211, 153, 0.12)",
+      "warning":      "#fbbf24",
+      "warningDim":   "rgba(251, 191, 36, 0.12)",
+      "danger":       "#f87171",
+      "dangerDim":    "rgba(248, 113, 113, 0.12)",
+      "info":         "#60a5fa",
+      "infoDim":      "rgba(96, 165, 250, 0.12)"
+    },
+    "text": {
+      "primary":    "#e8eaf2",
+      "secondary":  "#9498b4",
+      "muted":      "#5e6280",
+      "onAccent":   "#ffffff"
+    },
+    "border": {
+      "default":    "rgba(255, 255, 255, 0.06)",
+      "hover":      "rgba(255, 255, 255, 0.12)",
+      "focus":      "#7c6aff",
+      "divider":     "rgba(255, 255, 255, 0.04)"
+    }
+  },
+
+  "shadow": {
+    "sm":    "0 1px 3px rgba(0, 0, 0, 0.3)",
+    "md":    "0 4px 12px rgba(0, 0, 0, 0.4)",
+    "lg":    "0 8px 30px rgba(0, 0, 0, 0.5)",
+    "glow":  "0 0 20px rgba(124, 106, 255, 0.15)",
+    "panel": "0 4px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255,255,255,0.06)"
+  },
+
+  "radius": {
+    "sm":   "6px",
+    "md":   "10px",
+    "lg":   "14px",
+    "xl":   "20px",
+    "full": "9999px"
+  },
+
+  "spacing": {
+    "xs":  "4px",
+    "sm":  "8px",
+    "md":  "12px",
+    "lg":  "16px",
+    "xl":  "20px",
+    "2xl": "24px",
+    "3xl": "32px",
+    "4xl": "48px"
+  },
+
+  "transition": {
+    "fast":    "120ms ease",
+    "normal":  "200ms ease",
+    "slow":    "300ms cubic-bezier(0.4, 0, 0.2, 1)",
+    "spring":  "500ms cubic-bezier(0.34, 1.56, 0.64, 1)"
+  },
+
+  "typography": {
+    "fontFamily": {
+      "sans":    "'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
+      "mono":    "'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace",
+      "display": "'Inter', system-ui, sans-serif"
+    },
+    "fontSize": {
+      "xs":   "11px",
+      "sm":   "12px",
+      "base": "14px",
+      "md":   "16px",
+      "lg":   "18px",
+      "xl":   "22px",
+      "2xl":  "28px",
+      "3xl":  "36px"
+    },
+    "fontWeight": {
+      "normal":   "400",
+      "medium":   "500",
+      "semibold": "600",
+      "bold":     "700"
+    },
+    "lineHeight": {
+      "tight":  "1.25",
+      "normal": "1.5",
+      "relaxed":"1.75"
+    },
+    "letterSpacing": {
+      "tight":    "-0.02em",
+      "normal":   "0",
+      "wide":     "0.04em",
+      "extrawide":"0.08em"
+    }
+  },
+
+  "layout": {
+    "toolbar": {
+      "height": "48px",
+      "buttonSize": "32px",
+      "buttonIconSize": "16px",
+      "groupGap": "4px"
+    },
+    "sidebar": {
+      "width": "260px",
+      "shapeCardHeight": "54px",
+      "shapeCardGap": "6px",
+      "searchHeight": "36px"
+    },
+    "propertiesPanel": {
+      "width": "280px",
+      "sectionGap": "16px",
+      "fieldHeight": "32px"
+    },
+    "canvas": {
+      "gridSize": "20px",
+      "gridDotSize": "1px",
+      "gridColor": "rgba(255,255,255,0.04)",
+      "minimap": { "width": "160px", "height": "120px" }
+    },
+    "tabsBar": {
+      "height": "32px"
+    }
+  },
+
+  "components": {
+    "toolbarButton": {
+      "description": "工具栏图标按钮",
+      "css": {
+        "width": "32px",
+        "height": "32px",
+        "borderRadius": "8px",
+        "display": "inline-flex",
+        "alignItems": "center",
+        "justifyContent": "center",
+        "background": "transparent",
+        "color": "var(--text-secondary)",
+        "border": "1px solid transparent",
+        "cursor": "pointer",
+        "transition": "all var(--transition-fast)"
+      },
+      "states": {
+        "default":  { "color": "var(--text-secondary)" },
+        "hover":    { "background": "var(--bg-hover)", "color": "var(--text-primary)" },
+        "active":   { "background": "var(--accent)", "color": "#ffffff" },
+        "danger":  { "color": "var(--status-danger)" }
+      }
+    },
+    "shapeCard": {
+      "description": "侧边栏图形选择卡片",
+      "css": {
+        "height": "54px",
+        "borderRadius": "var(--radius-sm)",
+        "display": "flex",
+        "alignItems": "center",
+        "gap": "var(--space-sm)",
+        "padding": "0 var(--space-md)",
+        "borderLeft": "3px solid transparent",
+        "cursor": "pointer",
+        "transition": "all var(--transition-fast)"
+      },
+      "states": {
+        "default":  { "background": "transparent", "borderLeftColor": "transparent" },
+        "hover":    { "background": "var(--bg-hover)", "borderLeftColor": "var(--accent)" },
+        "selected": { "background": "var(--accent-dim)", "borderLeftColor": "var(--accent)" }
+      }
+    },
+    "canvasNode": {
+      "description": "画布上的流程图节点",
+      "types": {
+        "start":     { "fill": "rgba(52,211,153,0.15)", "stroke": "#34d399", "textColor": "#34d399" },
+        "process":   { "fill": "rgba(124,106,255,0.15)", "stroke": "#7c6aff", "textColor": "#e8eaf2" },
+        "decision":  { "fill": "rgba(251,191,36,0.15)", "stroke": "#fbbf24", "textColor": "#fbbf24" },
+        "end":       { "fill": "rgba(248,113,113,0.15)", "stroke": "#f87171", "textColor": "#f87171" }
+      },
+      "css": {
+        "minWidth": "120px",
+        "minHeight": "48px",
+        "borderRadius": "var(--radius-md)",
+        "borderWidth": "1.5px",
+        "padding": "var(--space-md) var(--space-lg)",
+        "fontSize": "14px",
+        "fontWeight": "500",
+        "cursor": "move"
+      },
+      "states": {
+        "selected": { "boxShadow": "0 0 0 2px var(--accent), 0 0 20px rgba(124,106,255,0.25)" },
+        "hover":    { "boxShadow": "0 0 0 1px rgba(255,255,255,0.15)" }
+      }
+    },
+    "inputField": {
+      "description": "表单输入框",
+      "css": {
+        "height": "32px",
+        "borderRadius": "var(--radius-sm)",
+        "border": "1px solid var(--border)",
+        "background": "var(--bg-elevated)",
+        "color": "var(--text-primary)",
+        "padding": "0 var(--space-md)",
+        "fontSize": "13px",
+        "fontFamily": "var(--font-mono)"
+      },
+      "states": {
+        "focus": { "borderColor": "var(--accent)", "outline": "none", "boxShadow": "0 0 0 2px var(--accent-dim)" }
+      }
+    },
+    "colorSwatch": {
+      "description": "颜色选择色块",
+      "css": {
+        "width": "24px",
+        "height": "24px",
+        "borderRadius": "var(--radius-sm)",
+        "border": "2px solid transparent",
+        "cursor": "pointer"
+      },
+      "states": {
+        "default":  { "borderColor": "transparent" },
+        "hover":    { "transform": "scale(1.15)" },
+        "selected": { "borderColor": "#ffffff" }
+      }
+    },
+    "floatingPill": {
+      "description": "浮动控件（缩放/工具）",
+      "css": {
+        "display": "flex",
+        "alignItems": "center",
+        "gap": "var(--space-xs)",
+        "padding": "4px 8px",
+        "borderRadius": "var(--radius-full)",
+        "background": "var(--bg-elevated)",
+        "border": "1px solid var(--border)",
+        "boxShadow": "var(--shadow-md)"
+      }
+    },
+    "minimap": {
+      "description": "画布小地图",
+      "css": {
+        "width": "160px",
+        "height": "120px",
+        "borderRadius": "var(--radius-md)",
+        "background": "rgba(12, 14, 20, 0.85)",
+        "border": "1px solid var(--border)",
+        "boxShadow": "var(--shadow-lg)",
+        "position": "absolute",
+        "bottom": "16px",
+        "right": "16px"
+      }
+    },
+    "sectionHeader": {
+      "description": "面板分区标题",
+      "css": {
+        "fontSize": "11px",
+        "fontWeight": "600",
+        "textTransform": "uppercase",
+        "letterSpacing": "0.08em",
+        "color": "var(--text-muted)",
+        "padding": "var(--space-sm) 0",
+        "marginBottom": "var(--space-sm)"
+      }
+    }
+  }
+}

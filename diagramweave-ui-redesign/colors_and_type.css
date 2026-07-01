@@ -1,0 +1,88 @@
+/* ============================================
+   DiagramWeave UI Redesign — Design Concept
+   Style: Deep Modern Editor
+   Reference: Figma + Excalidraw + Linear Dark
+   ============================================ */
+
+:root {
+  /* Background system — layered depth */
+  --bg-canvas: #0c0e14;
+  --bg-base: #111320;
+  --bg-surface: #161828;
+  --bg-elevated: #1c1f32;
+  --bg-hover: #232740;
+  --bg-active: #2a2e48;
+  --bg-code: #1a1d2e;
+
+  /* Accent — Indigo-Violet gradient identity */
+  --accent: #7c6aff;
+  --accent-hover: #9488ff;
+  --accent-dim: rgba(124, 106, 255, 0.12);
+  --accent-glow: rgba(124, 106, 255, 0.25);
+  --accent-surface: rgba(124, 106, 255, 0.06);
+  --accent-secondary: #38bdf8;
+  --accent-secondary-dim: rgba(56, 189, 248, 0.12);
+
+  /* Semantic status */
+  --status-success: #34d399;
+  --status-success-dim: rgba(52, 211, 153, 0.12);
+  --status-warning: #fbbf24;
+  --status-warning-dim: rgba(251, 191, 36, 0.12);
+  --status-danger: #f87171;
+  --status-danger-dim: rgba(248, 113, 113, 0.12);
+  --status-info: #60a5fa;
+  --status-info-dim: rgba(96, 165, 250, 0.12);
+
+  /* Text tokens */
+  --text-primary: #e8eaf2;
+  --text-secondary: #9498b4;
+  --text-muted: #5e6280;
+  --text-on-accent: #ffffff;
+
+  /* Border tokens */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --border-focus: var(--accent);
+  --divider: rgba(255, 255, 255, 0.04);
+
+  /* Shadow tokens */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(124, 106, 255, 0.15);
+
+  /* Radius tokens */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* Spacing tokens */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  /* Transition tokens */
+  --transition-fast: 120ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Typography */
+  --font-sans: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --font-display: 'Inter', system-ui, sans-serif;
+
+  color: var(--text-primary);
+  background: var(--bg-base);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
