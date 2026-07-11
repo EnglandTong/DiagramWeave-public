@@ -5,7 +5,7 @@
       "type": "page",
       "title": "编辑器基础版 (深色)",
       "version": 1,
-      "createdAt": 1782442000000,
+      "createdAt": 1783311000000,
       "canvasData": {
         "x": 0,
         "y": 0,
@@ -20,7 +20,7 @@
       "type": "page",
       "title": "编辑器增强版 (深色 Premium)",
       "version": 1,
-      "createdAt": 1782444000000,
+      "createdAt": 1783311000000,
       "canvasData": {
         "x": 620,
         "y": 0,
@@ -35,7 +35,7 @@
       "type": "page",
       "title": "编辑器浅色版",
       "version": 1,
-      "createdAt": 1782450000000,
+      "createdAt": 1783311000000,
       "canvasData": {
         "x": 1240,
         "y": 0,
@@ -50,7 +50,7 @@
       "type": "page",
       "title": "连线系统设计规格",
       "version": 1,
-      "createdAt": 1782448000000,
+      "createdAt": 1783311000000,
       "canvasData": {
         "x": 0,
         "y": 377,
@@ -63,6 +63,15 @@
   ],
   "config": {
     "autoLayout": true,
-    "deviceType": "desktop"
+    "deviceType": "desktop",
+    "projectName": "DiagramWeave UI 优化草案",
+    "designLibrary": {
+      "name": "谷歌",
+      "id": "dl_builtin_google",
+      "version": null,
+      "scope": "built-in-global",
+      "path": "c:\\Users\\engla\\.trae-cn\\design_libraries\\dl_builtin_google",
+      "versionSource": null
+    }
   }
 }

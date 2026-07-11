@@ -111,6 +111,7 @@ async function main() {
         env: {
           ...process.env,
           PLAYWRIGHT_REUSE_SERVER: '1',
+          NO_PROXY: '127.0.0.1,localhost',
         },
         stdio: 'inherit',
         shell: false,
