@@ -206,7 +206,12 @@ function getDefaultNodeStroke() {
   return getThemeVar('--node-stroke-default', '#3a3e55');
 }
 
+// 委託 DiagramWeaveSanitize.sanitizeHexColor（fallback=c 保持原寬鬆語義：無效輸入原樣返回）。
+// 拆分工作單 DW-QA-20260720-02：消除與模塊的雙重實現。
 function normalizeHexColor(c) {
+  if (typeof DiagramWeaveSanitize !== 'undefined' && typeof DiagramWeaveSanitize.sanitizeHexColor === 'function') {
+    return DiagramWeaveSanitize.sanitizeHexColor(c, c);
+  }
   return (c || '').trim().toLowerCase();
 }
 
@@ -628,10 +633,7 @@ function applyTemplate(index) {
   saveState();
 
   // 清空画布
-  state.nodes = [];
-  state.connections = [];
-  state.selectedNodeId = null;
-  state.selectedConnectionId = null;
+  if (typeof DiagramWeaveEditorState !== 'undefined') DiagramWeaveEditorState.resetSelection(state);
   canvasTransform.querySelectorAll('.node').forEach(el => el.remove());
   // 清除旧泳道
   canvasTransform.querySelectorAll('.swimlane-bg, .swimlane-label').forEach(el => el.remove());
@@ -3798,14 +3800,21 @@ async function processExternalDiagramFile(file, format) {
 
 function cancelImportPreview() {
   const overlay = document.getElementById('importPreviewOverlay');
-  if (!overlay?.classList.contains('visible')) return;
-  overlay.classList.remove('visible');
-  overlay.setAttribute('aria-hidden', 'true');
-  [...document.body.children].forEach(element => {
-    if (element !== overlay) element.inert = false;
-  });
-  pendingImportPreview = null;
-  if (importPreviewTrigger?.focus) importPreviewTrigger.focus();
+  if (typeof DiagramWeaveEditorOverlay !== 'undefined') {
+    DiagramWeaveEditorOverlay.closeOverlay(overlay, {
+      bodyChildren: [...document.body.children],
+      onClosed: () => {
+        pendingImportPreview = null;
+        if (importPreviewTrigger?.focus) importPreviewTrigger.focus();
+      },
+    });
+  } else if (overlay?.classList.contains('visible')) {
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    [...document.body.children].forEach((element) => { if (element !== overlay) element.inert = false; });
+    pendingImportPreview = null;
+    if (importPreviewTrigger?.focus) importPreviewTrigger.focus();
+  }
 }
 
 async function applyPendingImportPreview() {
@@ -3911,16 +3920,25 @@ function openCommandPalette() {
 
 function closeCommandPalette() {
   const overlay = document.getElementById('commandPaletteOverlay');
-  if (!overlay?.classList.contains('visible')) return;
-  overlay.classList.remove('visible');
-  overlay.setAttribute('aria-hidden', 'true');
-  [...document.body.children].forEach(element => {
-    if (element !== overlay) element.inert = false;
-  });
-  if (commandPaletteTrigger?.focus) commandPaletteTrigger.focus();
+  if (typeof DiagramWeaveEditorOverlay !== 'undefined') {
+    DiagramWeaveEditorOverlay.closeOverlay(overlay, {
+      bodyChildren: [...document.body.children],
+      onClosed: () => { if (commandPaletteTrigger?.focus) commandPaletteTrigger.focus(); },
+    });
+  } else if (overlay?.classList.contains('visible')) {
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    [...document.body.children].forEach((element) => { if (element !== overlay) element.inert = false; });
+    if (commandPaletteTrigger?.focus) commandPaletteTrigger.focus();
+  }
 }
 
 function trapOverlayFocus(e, overlayId) {
+  if (typeof DiagramWeaveEditorOverlay !== 'undefined'
+      && DiagramWeaveEditorOverlay
+      && typeof DiagramWeaveEditorOverlay.trapFocus === 'function') {
+    return DiagramWeaveEditorOverlay.trapFocus(e, overlayId);
+  }
   if (e.key !== 'Tab') return false;
   const overlay = document.getElementById(overlayId);
   if (!overlay?.classList.contains('visible')) return false;
@@ -4014,12 +4032,21 @@ function startMappingWizard(options) {
 
 function cancelMappingWizard() {
   const overlay = document.getElementById('mappingWizardOverlay');
-  if (!overlay?.classList.contains('visible')) return;
-  overlay.classList.remove('visible');
-  overlay.setAttribute('aria-hidden', 'true');
-  [...document.body.children].forEach(element => { if (element !== overlay) element.inert = false; });
-  pendingMappingWizard = null;
-  if (mappingWizardTrigger?.focus) mappingWizardTrigger.focus();
+  if (typeof DiagramWeaveEditorOverlay !== 'undefined') {
+    DiagramWeaveEditorOverlay.closeOverlay(overlay, {
+      bodyChildren: [...document.body.children],
+      onClosed: () => {
+        pendingMappingWizard = null;
+        if (mappingWizardTrigger?.focus) mappingWizardTrigger.focus();
+      },
+    });
+  } else if (overlay?.classList.contains('visible')) {
+    overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    [...document.body.children].forEach((element) => { if (element !== overlay) element.inert = false; });
+    pendingMappingWizard = null;
+    if (mappingWizardTrigger?.focus) mappingWizardTrigger.focus();
+  }
 }
 
 function saveCurrentMappingPreset() {
@@ -5479,10 +5506,7 @@ function prepareFlowImportData(nodeRows, connRows, options = {}) {
 
 function applyFlowData(nodeRows, connRows, showResultToast = true) {
   saveState();
-  state.nodes = [];
-  state.connections = [];
-  state.selectedNodeId = null;
-  state.selectedConnectionId = null;
+  if (typeof DiagramWeaveEditorState !== 'undefined') DiagramWeaveEditorState.resetSelection(state);
   canvasTransform.querySelectorAll('.node').forEach(el => el.remove());
   canvasTransform.querySelectorAll('.swimlane-bg, .swimlane-label').forEach(el => el.remove());
 
@@ -7259,6 +7283,12 @@ function scrollToCurrentNode() {
 
 // ===== 工具函数 =====
 function escapeHtml(str) {
+  // 委託至 DiagramWeaveEditorText（editor/text-utils.js，Loop 2.4 抽取）。
+  // 語義與原版完全等價：對非字符串返回 ''，並替換 & < > " '。
+  if (typeof DiagramWeaveEditorText !== 'undefined' && typeof DiagramWeaveEditorText.escapeHtml === 'function') {
+    return DiagramWeaveEditorText.escapeHtml(str);
+  }
+  // 防禦性 fallback：模塊未加載時退回瀏覽器原生方案
   const div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
