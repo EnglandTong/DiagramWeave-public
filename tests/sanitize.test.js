@@ -48,6 +48,19 @@ describe('DiagramWeaveSanitize', () => {
     expect(result.nodes[0].shape).toBe('rectangle');
     expect(result.nodes[0].fillColor).toBe('#1e2029');
     expect(result.nodes[0].strokeColor).toBe('#ff0000');
+    expect(result.nodes[0].textColor).toBe('auto');
+  });
+
+  it('preserves valid node text colors and rejects unsafe values', () => {
+    const result = S.sanitizeFlowDocument({
+      nodes: [
+        { id: 'n1', label: 'A', textColor: '#34D399' },
+        { id: 'n2', label: 'B', textColor: 'red;alert(1)' },
+      ],
+      connections: [],
+    });
+    expect(result.nodes[0].textColor).toBe('#34d399');
+    expect(result.nodes[1].textColor).toBe('auto');
   });
 
   it('drops connections referencing missing nodes', () => {
@@ -78,6 +91,26 @@ describe('DiagramWeaveSanitize', () => {
     expect(result.pages[0].name).not.toContain('<');
     expect(result.pages[0].layers[0].name).not.toContain('<');
     expect(result.connRouteMode).toBe('orthogonal');
+  });
+
+  it('preserves bounded wait and SLA analysis fields', () => {
+    const result = S.sanitizeFlowDocument({ version: 2, slaDays: 8, pages: [{
+      id: 'p1', slaDays: 5, nodes: [{ id: 'n1', label: 'Wait', waitDays: 2.5 }], connections: [],
+    }] });
+    expect(result.slaDays).toBe(8);
+    expect(result.pages[0].slaDays).toBe(5);
+    expect(result.pages[0].nodes[0].waitDays).toBe(2.5);
+  });
+
+  it('preserves bounded node tags for viewers and search', () => {
+    const result = S.sanitizeFlowDocument({ nodes: [{ id: 'n1', label: 'Tagged', tags: ['SLA', '<unsafe>'] }], connections: [] });
+    expect(result.nodes[0].tags).toEqual(['SLA', 'unsafe']);
+  });
+
+  it('preserves sanitized review threads in v2 projects', () => {
+    const result = S.sanitizeFlowDocument({ version: 2, pages: [{ id: 'p1', nodes: [{ id: 'n1' }], connections: [] }], reviewThreads: [{ id: 'r1', targetId: 'n1', status: 'approved', comments: [{ id: 'c1', author: '<QA>', body: '<script>note</script>' }] }] });
+    expect(result.reviewThreads[0]).toMatchObject({ id: 'r1', targetId: 'n1', status: 'approved' });
+    expect(result.reviewThreads[0].comments[0]).toMatchObject({ author: 'QA', body: 'scriptnote/script' });
   });
 
   it('rejects invalid connRouteMode', () => {

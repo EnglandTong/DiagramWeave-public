@@ -2,15 +2,15 @@
 
 ## Status
 
-Ready
+Idle — DW-P5-01 accepted, all security and governance fixes complete.
 
 ## Last Action
 
-CMS / Agent Loop Engineering governance adapted for DiagramWeave upgrade.
+DW-P5-01 Security Hardening and Governance Fix accepted 2026-07-20.
 
 ## Active Work
 
-Next work order: `DW-P0-01 Extension Kernel`
+None. All work orders accepted. 129 tests pass across 28 files.
 
 ## Evidence Required
 
@@ -28,11 +28,11 @@ None.
 
 ## Root Cause / Context
 
-DiagramWeave has grown as a single-page editor with many features concentrated in `flowchart-editor.js`. Future capabilities such as Visio import/export, template packs, stencil packs, mapping, routing engines, and history need an extension boundary before further feature growth.
+DW-P5-01 addressed: (1) P1 xlsx dependency replaced with SheetJS CE 0.20.3 resolving High CVEs, (2) governance file inconsistencies fixed (NEXT_ACTIONS.md deduplication, AC-DW-010 status aligned across AUDIT/STATUS/ACCEPTANCE), (3) sanitizeSvg function added to prevent XSS via stencil SVG innerHTML injection, (4) JSON.parse try/catch added for File System Access API path, (5) VSDX connector detection improved to use Master="2" attribute instead of ID≥1000 threshold. 8 new tests added (1 visio-bridge + 7 sanitize-svg).
 
 ## Next Action
 
-Controller dispatches `Docs/WORK_ORDER_DW-P0-01_EXTENSION_KERNEL.md` to Developer.
+Awaiting Owner direction for post-upgrade work or queue closure.
 
 ## Stop Rule Triggered
 

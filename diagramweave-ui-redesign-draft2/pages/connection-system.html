@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>连线系统设计规格</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+  <style id="theme-vars">
+/* TRAE Work Design System — Light Theme Tokens */
+:root {
+  /* radius */
+  --radius-0: 0px; --radius-2: 2px; --radius-4: 4px; --radius-6: 6px;
+  --radius-8: 8px; --radius-10: 10px; --radius-12: 12px; --radius-16: 16px;
+  --radius-full: 999px; --radius-xs: var(--radius-2); --radius-sm: var(--radius-4);
+  --radius-md: var(--radius-6); --radius-lg: var(--radius-8); --radius-xl: var(--radius-10);
+  --border-width-default: 1px;
+  /* spacers */
+  --spacer-0: 0px; --spacer-2: 2px; --spacer-3: 3px; --spacer-4: 4px;
+  --spacer-6: 6px; --spacer-8: 8px; --spacer-10: 10px; --spacer-12: 12px;
+  --spacer-16: 16px; --spacer-20: 20px; --spacer-24: 24px; --spacer-32: 32px;
+  --spacer-40: 40px; --spacer-48: 48px; --spacer-64: 64px;
+  /* icon sizes */
+  --icon-size-12: 12px; --icon-size-14: 14px; --icon-size-16: 16px;
+  --icon-size-20: 20px; --icon-size-24: 24px;
+  /* font */
+  --font-family-default: "SF Pro Text", "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-heading: "SF Pro", "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-metric: "Inter", "SF Pro Text", "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-weight-default: 400; --font-weight-code: 450;
+  --font-weight-medium: 500; --font-weight-strong: 600;
+  --font-family-base: var(--font-family-default);
+  --font-family-heading-alias: var(--font-family-heading);
+  --font-family-mono-alias: var(--font-family-mono);
+  /* body text styles */
+  --body-xs-font-size: 10px; --body-xs-line-height: 14px; --body-xs-letter-spacing: 0.01em;
+  --body-sm-font-size: 11px; --body-sm-line-height: 16px; --body-sm-letter-spacing: 0;
+  --body-md-font-size: 12px; --body-md-line-height: 18px; --body-md-letter-spacing: 0;
+  --body-base-font-size: 14px; --body-base-line-height: 20px; --body-base-letter-spacing: 0;
+  --body-lg-font-size: 18px; --body-lg-line-height: 28px; --body-lg-letter-spacing: 0;
+  --body-xs-font-family: var(--font-family-default); --body-xs-font-weight: var(--font-weight-default);
+  --body-sm-font-family: var(--font-family-default); --body-sm-font-weight: var(--font-weight-default);
+  --body-md-font-family: var(--font-family-default); --body-md-font-weight: var(--font-weight-default);
+  --body-base-font-family: var(--font-family-default); --body-base-font-weight: var(--font-weight-default);
+  --body-lg-font-family: var(--font-family-default); --body-lg-font-weight: var(--font-weight-default);
+  --body-xs-strong-font-weight: var(--font-weight-medium);
+  --body-sm-strong-font-weight: var(--font-weight-medium);
+  --body-md-strong-font-weight: var(--font-weight-medium);
+  --body-base-strong-font-weight: var(--font-weight-medium);
+  --body-base-strong-font-size: var(--body-base-font-size);
+  --body-base-strong-font-family: var(--font-family-default);
+  --body-base-strong-line-height: var(--body-base-line-height);
+  --body-base-strong-letter-spacing: var(--body-base-letter-spacing);
+  --body-sm-strong-font-weight: var(--font-weight-medium);
+  --body-sm-strong-font-size: var(--body-sm-font-size);
+  --body-sm-strong-font-family: var(--font-family-default);
+  --body-sm-strong-line-height: var(--body-sm-line-height);
+  --body-sm-strong-letter-spacing: var(--body-sm-letter-spacing);
+  --body-xs-strong-font-size: var(--body-xs-font-size);
+  --body-xs-strong-font-family: var(--font-family-default);
+  --body-xs-strong-line-height: var(--body-xs-line-height);
+  --body-xs-strong-letter-spacing: var(--body-xs-letter-spacing);
+  /* heading text styles */
+  --heading-3xs-font-size: 11px; --heading-3xs-line-height: 16px; --heading-3xs-font-weight: var(--font-weight-medium); --heading-3xs-letter-spacing: 0;
+  --heading-2xs-font-size: 12px; --heading-2xs-line-height: 16px; --heading-2xs-font-weight: var(--font-weight-medium); --heading-2xs-letter-spacing: 0;
+  --heading-xs-font-size: 13px; --heading-xs-line-height: 18px; --heading-xs-font-weight: var(--font-weight-medium); --heading-xs-letter-spacing: 0;
+  --heading-sm-font-size: 16px; --heading-sm-line-height: 24px; --heading-sm-font-weight: var(--font-weight-strong); --heading-sm-letter-spacing: -0.01em;
+  --heading-md-font-size: 20px; --heading-md-line-height: 28px; --heading-md-font-weight: var(--font-weight-strong); --heading-md-letter-spacing: -0.01em;
+  --heading-lg-font-size: 22px; --heading-lg-line-height: 32px; --heading-lg-font-weight: var(--font-weight-strong); --heading-lg-letter-spacing: -0.01em;
+  --heading-2xl-font-size: 28px; --heading-2xl-line-height: 36px; --heading-2xl-font-weight: var(--font-weight-strong); --heading-2xl-letter-spacing: -0.01em;
+  /* code editor */
+  --code-editor-font-family: var(--font-family-mono);
+  --code-editor-font-size: 13px; --code-editor-line-height: 20px;
+  /* bg */
+  --bg-base-default: #FFFFFF; --bg-base-secondary: #F5F5F5;
+  --bg-base-tertiary: #E5E5E5;
+  --bg-overlay-l1: rgba(115, 115, 115, 0.08);
+  --bg-overlay-l2: rgba(115, 115, 115, 0.12);
+  --bg-overlay-l3: rgba(115, 115, 115, 0.16);
+  --bg-overlay-l4: rgba(115, 115, 115, 0.20);
+  --bg-white: #FFFFFF; --bg-menu: #FFFFFF; --bg-tooltip: #FFFFFF;
+  --bg-invert: #262626; --bg-invert-hover: #404040; --bg-invert-active: #171717;
+  --bg-invert-disabled: rgba(115, 115, 115, 0.20);
+  --bg-brand: #4B3FE3; --bg-brand-hover: #6A6FFF;
+  --bg-brand-active: #3F31C6; --bg-brand-disabled: rgba(75, 63, 227, 0.22);
+  --bg-brand-popup: rgba(170, 183, 255, 0.36);
+  /* text */
+  --text-default: #171717; --text-default-hover: #262626;
+  --text-default-active: #262626;
+  --text-secondary: #404040; --text-secondary-hover: #171717;
+  --text-secondary-active: #171717;
+  --text-tertiary: #737373; --text-disabled: #A1A1A1;
+  --text-onbrand: #FFFFFF; --text-onaccent: #FFFFFF;
+  --text-white: #FFFFFF; --text-brand: #4B3FE3;
+  /* icon */
+  --icon-default: #262626; --icon-default-hover: #171717;
+  --icon-default-active: #171717; --icon-secondary: #404040;
+  --icon-secondary-hover: #262626; --icon-secondary-active: #262626;
+  --icon-tertiary: #737373; --icon-disabled: #A1A1A1;
+  --icon-onbrand: #FFFFFF; --icon-onaccent: #FFFFFF;
+  --icon-white: #FFFFFF; --icon-brand: #4B3FE3;
+  --icon-brand-hover: #6A6FFF;
+  /* border */
+  --border-neutral-l1: rgba(115, 115, 115, 0.12);
+  --border-neutral-l2: rgba(115, 115, 115, 0.18);
+  --border-neutral-l3: rgba(115, 115, 115, 0.36);
+  --border-contrast: #000000; --border-brand: #4B3FE3;
+  /* status */
+  --status-primary-default: #2F74FF; --status-primary-surface-l1: rgba(47, 116, 255, 0.12);
+  --status-primary-surface-l2: rgba(47, 116, 255, 0.16);
+  --status-success-default: #15A877;
+  --status-success-surface-l1: rgba(64, 176, 139, 0.12);
+  --status-success-surface-l2: rgba(64, 176, 139, 0.16);
+  --status-alert-default: #FEA900;
+  --status-alert-surface-l1: rgba(254, 169, 0, 0.14);
+  --status-alert-surface-l2: rgba(254, 169, 0, 0.18);
+  --status-warning-default: #E27900;
+  --status-warning-surface-l1: rgba(226, 121, 0, 0.12);
+  --status-warning-surface-l2: rgba(226, 121, 0, 0.16);
+  --status-error-default: #E8463A;
+  --status-error-surface-l1: rgba(232, 70, 58, 0.12);
+  --status-error-surface-l2: rgba(232, 70, 58, 0.16);
+  /* viz */
+  --viz-series-brand: #4B3FE3; --viz-series-coral: #F87454;
+  --viz-series-mint: #1DC981; --viz-series-amber: #EDAA45;
+  --viz-series-sky: #22A5F7; --viz-series-violet: #B655FC;
+  --viz-series-teal: #59E8E8;
+  color: var(--text-default);
+  background: var(--bg-base-default);
+  font-family: var(--font-family-default);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+  </style>
+  <style type="text/tailwindcss">
+    @theme inline {
+      --color-bg-base-default: var(--bg-base-default);
+      --color-bg-base-secondary: var(--bg-base-secondary);
+      --color-bg-base-tertiary: var(--bg-base-tertiary);
+      --color-bg-overlay-l1: var(--bg-overlay-l1);
+      --color-bg-overlay-l2: var(--bg-overlay-l2);
+      --color-bg-overlay-l3: var(--bg-overlay-l3);
+      --color-bg-menu: var(--bg-menu);
+      --color-bg-brand: var(--bg-brand);
+      --color-bg-invert: var(--bg-invert);
+      --color-text-default: var(--text-default);
+      --color-text-secondary: var(--text-secondary);
+      --color-text-tertiary: var(--text-tertiary);
+      --color-text-disabled: var(--text-disabled);
+      --color-text-brand: var(--text-brand);
+      --color-bg-foreground: var(--text-default);
+      --color-border-theme: var(--border-neutral-l1);
+      --color-border-strong: var(--border-neutral-l2);
+      --color-viz-brand: var(--viz-series-brand);
+      --color-viz-coral: var(--viz-series-coral);
+      --color-viz-sky: var(--viz-series-sky);
+      --color-viz-amber: var(--viz-series-amber);
+      --color-viz-mint: var(--viz-series-mint);
+    }
+    @layer base {
+      body { background: var(--bg-base-default); color: var(--text-default); }
+    }
+  </style>
+  <style id="semantic-token-fallback">
+    .bg-primary { background-color: var(--bg-brand); }
+    .text-foreground { color: var(--text-default); }
+    .text-muted-foreground { color: var(--text-secondary); }
+    .bg-card { background-color: var(--bg-base-secondary); }
+    .bg-surface { background-color: var(--bg-base-secondary); }
+    .border-border { border-color: var(--border-neutral-l1); }
+  </style>
+  <style id="component-styles">
+    /* Shared atoms */
+    .icon, .icon-img { display: inline-block; color: currentColor; flex: 0 0 auto; object-fit: contain; vertical-align: middle; }
+    .icon { width: var(--icon-size-16); height: var(--icon-size-16); }
+    .icon-img { width: 16px; height: 16px; flex-basis: 16px; }
+    /* Card */
+    .ds-card { background: var(--bg-base-secondary); border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-12); padding: var(--spacer-20); color: var(--text-default); }
+    /* Tag */
+    .ds-tag { display: inline-flex; align-items: center; justify-content: center; gap: var(--spacer-4); height: 22px; padding: 0 var(--spacer-8); border-radius: var(--radius-8); font-size: var(--body-sm-font-size); line-height: var(--body-sm-line-height); font-weight: var(--body-sm-strong-font-weight); background: var(--bg-overlay-l2); color: var(--text-secondary); border: 1px solid var(--border-neutral-l1); white-space: nowrap; }
+  </style>
+  <style>
+    .demo-canvas { border-radius: var(--radius-8); border: 1px solid var(--border-neutral-l1); background: var(--bg-base-default); overflow: hidden; }
+    .demo-canvas svg { display: block; width: 100%; height: 100%; }
+    .conn-card { transition: border-color 120ms ease; }
+    .conn-card:hover { border-color: var(--border-neutral-l2); }
+    svg text { font-family: var(--font-family-default); }
+    @keyframes flowDot { 0% { opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; } }
+    .flow-dot { animation: flowDot 2s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .flow-dot { animation: none; opacity: 0.8; } }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- Shared SVG defs (hidden) -->
+  <svg width="0" height="0" style="position:absolute;" aria-hidden="true">
+    <defs>
+      <pattern id="dotGrid" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+        <circle cx="8" cy="8" r="0.6" fill="rgba(115,115,115,0.15)"/>
+      </pattern>
+      <marker id="arrowTeal" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+        <path d="M 0 0 L 8 4 L 0 8 Z" fill="#59e8e8"/>
+      </marker>
+    </defs>
+  </svg>
+
+  <main class="max-w-[1280px] mx-auto px-10 md:px-5">
+
+    <!-- Page Header -->
+    <header class="pt-12 pb-8">
+      <h1 style="font-family: var(--font-family-heading); font-size: var(--heading-2xl-font-size); font-weight: var(--heading-2xl-font-weight); line-height: var(--heading-2xl-line-height); color: var(--text-default); letter-spacing: var(--heading-2xl-letter-spacing); text-wrap: balance; word-break: keep-all; overflow-wrap: break-word;">
+        DiagramWeave 连线系统设计
+      </h1>
+      <p style="font-size: var(--body-base-font-size); color: var(--text-secondary); margin-top: var(--spacer-8); max-width: 560px; line-height: var(--body-base-line-height);">
+        连线是流程图的核心视觉语言。DiagramWeave 提供多种连线风格与交叉处理方案，确保复杂图表始终清晰可读。
+      </p>
+    </header>
+
+    <!-- ==================== Section 1: Connection Styles ==================== -->
+    <section class="pb-12">
+      <div class="mb-6">
+        <div class="flex items-center gap-2.5">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-8); background: var(--bg-overlay-l1); color: var(--icon-secondary);">
+            <i data-lucide="spline" style="width: 16px; height: 16px;"></i>
+          </span>
+          <h2 style="font-size: var(--heading-sm-font-size); font-weight: var(--heading-sm-font-weight); line-height: var(--heading-sm-line-height); color: var(--text-default);">
+            连线风格
+          </h2>
+        </div>
+        <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-6); margin-left: calc(32px + var(--spacer-10));">
+          DiagramWeave 支持多种连线样式，适配不同流程图场景
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+
+        <!-- ====== Style A: Bezier Curve ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 260px;">
+            <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="260" fill="url(#dotGrid)" />
+              <!-- Node A -->
+              <rect x="30" y="100" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="62" y="120" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 A</text>
+              <!-- Node B -->
+              <rect x="186" y="100" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="218" y="120" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 B</text>
+              <!-- Bezier path -->
+              <path id="bezierPath" d="M 94 116 C 130 116, 150 50, 186 116" stroke="#4b3fe3" stroke-width="2" fill="none" />
+              <!-- Flowing dot -->
+              <circle r="3" fill="#4b3fe3" class="flow-dot">
+                <animateMotion dur="2s" repeatCount="indefinite">
+                  <mpath href="#bezierPath" />
+                </animateMotion>
+              </circle>
+              <circle r="3" fill="#4b3fe3" opacity="0.5" class="flow-dot">
+                <animateMotion dur="2s" repeatCount="indefinite" begin="0.5s">
+                  <mpath href="#bezierPath" />
+                </animateMotion>
+              </circle>
+              <!-- End indicator -->
+              <circle cx="186" cy="116" r="3" fill="#4b3fe3" opacity="0.2" />
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: var(--spacer-8);">
+              <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">贝塞尔曲线</span>
+              <span class="ds-tag">默认</span>
+            </div>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">适合一般流程，平滑优雅</p>
+          </div>
+        </div>
+
+        <!-- ====== Style B: Orthogonal ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 260px;">
+            <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="260" fill="url(#dotGrid)" />
+              <!-- Node A -->
+              <rect x="30" y="30" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="62" y="50" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 A</text>
+              <!-- Node B -->
+              <rect x="186" y="192" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="218" y="212" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 B</text>
+              <!-- Orthogonal path with rounded corners -->
+              <path id="orthoPath" d="M 94 46 L 140 46 Q 150 46 150 56 L 150 192 Q 150 202 160 202 L 186 208" stroke="#4b3fe3" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+              <!-- Flowing dot -->
+              <circle r="3" fill="#4b3fe3" class="flow-dot">
+                <animateMotion dur="2.5s" repeatCount="indefinite">
+                  <mpath href="#orthoPath" />
+                </animateMotion>
+              </circle>
+              <circle r="3" fill="#4b3fe3" opacity="0.5" class="flow-dot">
+                <animateMotion dur="2.5s" repeatCount="indefinite" begin="0.6s">
+                  <mpath href="#orthoPath" />
+                </animateMotion>
+              </circle>
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <div style="display: flex; align-items: center; gap: var(--spacer-8);">
+              <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">正交折线</span>
+              <span class="ds-tag" style="background: var(--bg-brand); color: var(--text-onbrand); border-color: var(--bg-brand);">推荐</span>
+            </div>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">适合结构化流程图</p>
+          </div>
+        </div>
+
+        <!-- ====== Style C: Straight Line ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 260px;">
+            <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="260" fill="url(#dotGrid)" />
+              <!-- Node A -->
+              <rect x="30" y="110" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="62" y="130" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 A</text>
+              <!-- Node B -->
+              <rect x="186" y="110" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="218" y="130" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 B</text>
+              <!-- Straight line with arrow -->
+              <line x1="94" y1="126" x2="186" y2="126" stroke="#59e8e8" stroke-width="2" marker-end="url(#arrowTeal)" />
+              <!-- Flowing dot -->
+              <circle r="3" fill="#59e8e8" class="flow-dot">
+                <animateMotion dur="1.8s" repeatCount="indefinite" path="M 94 126 L 186 126" />
+              </circle>
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">直线连接</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">适合简单关系</p>
+          </div>
+        </div>
+
+        <!-- ====== Style D: Step / Staircase ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 260px;">
+            <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="260" fill="url(#dotGrid)" />
+              <!-- Node A -->
+              <rect x="20" y="40" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="52" y="60" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 A</text>
+              <!-- Node B -->
+              <rect x="196" y="184" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="228" y="204" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 B</text>
+              <!-- Staircase path: 45-degree angled segments -->
+              <path id="stepPath" d="M 84 56 L 140 112 L 196 112 L 228 200" stroke="#1dc981" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+              <!-- Flowing dot -->
+              <circle r="3" fill="#1dc981" class="flow-dot">
+                <animateMotion dur="2.2s" repeatCount="indefinite">
+                  <mpath href="#stepPath" />
+                </animateMotion>
+              </circle>
+              <circle r="3" fill="#1dc981" opacity="0.5" class="flow-dot">
+                <animateMotion dur="2.2s" repeatCount="indefinite" begin="0.5s">
+                  <mpath href="#stepPath" />
+                </animateMotion>
+              </circle>
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">阶梯线</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">适合时序图</p>
+          </div>
+        </div>
+
+        <!-- ====== Style E: Freehand / Organic ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 260px;">
+            <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="260" fill="url(#dotGrid)" />
+              <!-- Node A -->
+              <rect x="20" y="100" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="52" y="120" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 A</text>
+              <!-- Node B -->
+              <rect x="196" y="100" width="64" height="32" rx="6" fill="#ffffff" stroke="rgba(115,115,115,0.12)" stroke-width="1" />
+              <text x="228" y="120" text-anchor="middle" fill="#171717" font-size="11" font-weight="500">节点 B</text>
+              <!-- Organic / freehand path -->
+              <path id="freePath" d="M 84 112 C 100 112, 108 78, 122 84 C 136 90, 142 144, 156 140 C 170 136, 178 96, 192 108 C 200 114, 200 112, 196 116" stroke="#f87454" stroke-width="2" fill="none" stroke-linecap="round" />
+              <!-- Flowing dot -->
+              <circle r="3" fill="#f87454" class="flow-dot">
+                <animateMotion dur="2.4s" repeatCount="indefinite">
+                  <mpath href="#freePath" />
+                </animateMotion>
+              </circle>
+              <circle r="3" fill="#f87454" opacity="0.5" class="flow-dot">
+                <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.6s">
+                  <mpath href="#freePath" />
+                </animateMotion>
+              </circle>
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">自由曲线</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">适合头脑风暴</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Divider -->
+    <div style="height: 1px; background: var(--border-neutral-l1); margin-bottom: var(--spacer-40);"></div>
+
+    <!-- ==================== Section 2: Cross-Over Solutions ==================== -->
+    <section>
+      <div class="mb-6">
+        <div class="flex items-center gap-2.5">
+          <span style="display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-8); background: var(--bg-overlay-l1); color: var(--icon-secondary);">
+            <i data-lucide="git-branch" style="width: 16px; height: 16px;"></i>
+          </span>
+          <h2 style="font-size: var(--heading-sm-font-size); font-weight: var(--heading-sm-font-weight); line-height: var(--heading-sm-line-height); color: var(--text-default);">
+            交叉与跨越处理
+          </h2>
+        </div>
+        <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-6); margin-left: calc(32px + var(--spacer-10));">
+          当连线不可避免地交叉时，提供清晰的视觉层次
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <!-- ====== Solution A: Bridge / Overpass ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 240px;">
+            <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="240" fill="url(#dotGrid)" />
+              <!-- Primary line (vertical, goes straight through) -->
+              <line x1="140" y1="30" x2="140" y2="210" stroke="#4b3fe3" stroke-width="2" />
+              <!-- Primary label -->
+              <text x="148" y="28" fill="#4b3fe3" font-size="10" font-weight="500">主线</text>
+              <!-- Secondary line (horizontal) — broken with bridge arc -->
+              <path d="M 40 120 L 130 120" stroke="#59e8e8" stroke-width="2" fill="none" />
+              <!-- Bridge arc (semicircle going over the primary line) -->
+              <path d="M 130 120 A 10 10 0 0 1 150 120" stroke="#59e8e8" stroke-width="2" fill="none" stroke-linecap="round" />
+              <path d="M 150 120 L 240 120" stroke="#59e8e8" stroke-width="2" fill="none" />
+              <!-- Secondary label -->
+              <text x="242" y="118" fill="#59e8e8" font-size="10" font-weight="500">次线</text>
+              <!-- Intersection indicator -->
+              <circle cx="140" cy="120" r="2" fill="rgba(115,115,115,0.15)" />
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">桥接</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">底层连线在交叉点跳过</p>
+          </div>
+        </div>
+
+        <!-- ====== Solution B: Opacity Layering ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 240px;">
+            <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <mask id="opacityMask">
+                  <rect width="280" height="240" fill="white" />
+                  <rect x="128" y="108" width="24" height="24" rx="2" fill="black" />
+                </mask>
+              </defs>
+              <rect width="280" height="240" fill="url(#dotGrid)" />
+              <!-- Primary line (vertical, full opacity, on top) -->
+              <line x1="140" y1="30" x2="140" y2="210" stroke="#4b3fe3" stroke-width="2" />
+              <!-- Primary label -->
+              <text x="148" y="28" fill="#4b3fe3" font-size="10" font-weight="500">主线</text>
+              <!-- Secondary line (horizontal) — masked at intersection -->
+              <line x1="40" y1="120" x2="240" y2="120" stroke="#59e8e8" stroke-width="2" mask="url(#opacityMask)" />
+              <!-- Faint secondary in intersection zone -->
+              <line x1="128" y1="120" x2="152" y2="120" stroke="#59e8e8" stroke-width="2" opacity="0.15" />
+              <!-- Secondary label -->
+              <text x="242" y="118" fill="#59e8e8" font-size="10" font-weight="500">次线</text>
+              <!-- Intersection zone indicator -->
+              <rect x="128" y="108" width="24" height="24" rx="2" fill="none" stroke="rgba(115,115,115,0.12)" stroke-width="0.5" stroke-dasharray="3 2" />
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">透明度分层</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">交叉区域自动降低底层透明度</p>
+          </div>
+        </div>
+
+        <!-- ====== Solution C: Gap Break ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 240px;">
+            <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="240" fill="url(#dotGrid)" />
+              <!-- Primary line (vertical, full, on top) -->
+              <line x1="140" y1="30" x2="140" y2="210" stroke="#4b3fe3" stroke-width="2" />
+              <!-- Primary label -->
+              <text x="148" y="28" fill="#4b3fe3" font-size="10" font-weight="500">主线</text>
+              <!-- Secondary line (horizontal) — with gap at intersection -->
+              <line x1="40" y1="120" x2="128" y2="120" stroke="#59e8e8" stroke-width="2" stroke-linecap="round" />
+              <line x1="152" y1="120" x2="240" y2="120" stroke="#59e8e8" stroke-width="2" stroke-linecap="round" />
+              <!-- Secondary label -->
+              <text x="242" y="118" fill="#59e8e8" font-size="10" font-weight="500">次线</text>
+              <!-- Gap zone indicator -->
+              <rect x="128" y="112" width="24" height="16" rx="3" fill="none" stroke="rgba(115,115,115,0.08)" stroke-width="0.5" stroke-dasharray="3 2" />
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">间隙中断</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">交叉点处断开底层连线</p>
+          </div>
+        </div>
+
+        <!-- ====== Solution D: Z-Order Highlight ====== -->
+        <div class="ds-card conn-card" style="padding: var(--spacer-24); display: flex; flex-direction: column;">
+          <div class="demo-canvas" style="flex: 1; min-height: 240px;">
+            <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+              <rect width="280" height="240" fill="url(#dotGrid)" />
+              <!-- Secondary line (horizontal, underneath) -->
+              <line x1="40" y1="120" x2="240" y2="120" stroke="#59e8e8" stroke-width="2" />
+              <!-- Secondary label -->
+              <text x="242" y="118" fill="#59e8e8" font-size="10" font-weight="500">次线</text>
+              <!-- Primary line (vertical, on top) -->
+              <line x1="140" y1="30" x2="140" y2="108" stroke="#4b3fe3" stroke-width="2" />
+              <line x1="140" y1="132" x2="140" y2="210" stroke="#4b3fe3" stroke-width="2" />
+              <!-- Emphasized segment at intersection (thicker, no glow filter) -->
+              <line x1="140" y1="108" x2="140" y2="132" stroke="#4b3fe3" stroke-width="3" />
+              <!-- Primary label -->
+              <text x="148" y="28" fill="#4b3fe3" font-size="10" font-weight="500">主线</text>
+              <!-- Intersection highlight zone -->
+              <circle cx="140" cy="120" r="14" fill="none" stroke="rgba(75,63,227,0.12)" stroke-width="0.5" stroke-dasharray="3 2" />
+            </svg>
+          </div>
+          <div style="margin-top: var(--spacer-12); flex-shrink: 0;">
+            <span style="font-size: var(--body-base-strong-font-size); font-weight: var(--body-base-strong-font-weight); color: var(--text-default);">Z-顺序层级</span>
+            <p style="font-size: var(--body-sm-font-size); color: var(--text-secondary); margin-top: var(--spacer-4); line-height: var(--body-sm-line-height);">主线覆盖在次线之上</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom spacing -->
+  <div style="height: var(--spacer-64);"></div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

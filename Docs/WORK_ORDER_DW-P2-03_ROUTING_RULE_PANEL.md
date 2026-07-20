@@ -11,12 +11,12 @@ Expose connection routing rules in a user-facing panel.
 
 ## Acceptance Criteria
 
-- [ ] Endpoint locking preserves the user's chosen source and target ports.
-- [ ] Obstacle padding can be configured.
-- [ ] Bridge behavior can be configured.
-- [ ] Manual waypoints can be added, moved, locked, and removed.
-- [ ] Label placement can be set to auto, above, right, or custom.
-- [ ] Rules persist in project files.
+- [x] Endpoint locking preserves the user's chosen source and target ports.
+- [x] Obstacle padding can be configured.
+- [x] Bridge behavior can be configured.
+- [x] Manual waypoints can be added, moved, locked, and removed.
+- [x] Label placement can be set to auto, above, right, or custom.
+- [x] Rules persist in project files.
 
 ## Verification
 
@@ -30,3 +30,13 @@ Functional:
 - Draw from A top to B bottom and verify endpoint ports remain fixed.
 - Add a waypoint and reload the file.
 - Configure bridge behavior and verify crossing lines.
+
+## QA Acceptance
+
+Accepted: 2026-07-17
+
+- Syntax check: passed.
+- Vitest: 23 files, 94 tests passed.
+- Playwright: 49 tests passed, including routing persistence and crossing bridge behavior.
+- Visual review: Rules command fits the desktop toolbar; phone and tablet baselines remain stable.
+- Compatibility: Excel import/mapping and JSON/VSO format gates remain green after routing fields were added.

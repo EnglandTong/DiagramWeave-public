@@ -16,7 +16,7 @@
       "code":      "#1a1d2e"
     },
     "accent": {
-      "primary":      "#7c6aff",
+      "primary":      "#8b7fff",
       "primaryHover": "#9488ff",
       "primaryDim":   "rgba(124, 106, 255, 0.12)",
       "primaryGlow":  "rgba(124, 106, 255, 0.25)",
@@ -37,7 +37,7 @@
     "text": {
       "primary":    "#e8eaf2",
       "secondary":  "#9498b4",
-      "muted":      "#5e6280",
+      "muted":      "#858aa8",
       "onAccent":   "#ffffff"
     },
     "border": {

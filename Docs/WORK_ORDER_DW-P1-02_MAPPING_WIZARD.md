@@ -11,12 +11,12 @@ Add a mapping wizard so users choose which Excel/JSON fields map to DiagramWeave
 
 ## Acceptance Criteria
 
-- [ ] User can map node fields.
-- [ ] User can map connection fields.
-- [ ] User can map `fromPort` and `toPort`.
-- [ ] User can map coordinates and dimensions.
-- [ ] Mapping presets can be reused in the current browser profile.
-- [ ] Auto-layout is optional and off when coordinates are supplied.
+- [x] User can map node fields.
+- [x] User can map connection fields.
+- [x] User can map `fromPort` and `toPort`.
+- [x] User can map coordinates and dimensions.
+- [x] Mapping presets can be reused in the current browser profile.
+- [x] Auto-layout is optional and off when coordinates are supplied.
 
 ## Verification
 
@@ -30,3 +30,15 @@ Functional:
 - Import a sheet with nonstandard column names through manual mapping.
 - Reuse a saved mapping preset.
 - Confirm coordinates and ports are preserved.
+
+## QA Acceptance
+
+Result: **Accepted** on 2026-07-16.
+
+- Nonstandard Excel and JSON columns are manually mappable.
+- Node IDs, labels, details, geometry, role, layer, page, and colors are represented by the mapping schema.
+- Connection endpoints, ports, labels, label positions, and pages are represented by the mapping schema.
+- Browser-local presets save and reload both node and connection mappings.
+- X/Y mappings default auto-layout to off; imported geometry and ports are preserved.
+- All mapped results pass through the accepted import preview before explicit apply.
+- Syntax passed; Vitest 77/77; Playwright 24/24.

@@ -33,7 +33,10 @@ test.describe('DiagramWeave smoke', () => {
   test('template library loads starter template', async ({ page }) => {
     await waitForEditorReady(page);
     await page.locator('.template-btn').click();
-    await expect(page.locator('.template-dialog-item')).toHaveCount(7, { timeout: 30000 });
+    await expect(page.locator('.template-dialog-item')).toHaveCount(
+      await page.evaluate(() => allTemplates.length),
+      { timeout: 30000 }
+    );
     await expect(page.locator('.template-dialog-item-name').first()).toBeVisible();
   });
 

@@ -11,11 +11,11 @@ Add a shared import preview pipeline. Importers must produce preview nodes, prev
 
 ## Acceptance Criteria
 
-- [ ] Excel and JSON imports can run in preview mode.
-- [ ] The preview shows nodes, connections, skipped rows, and warnings.
-- [ ] Applying preview is explicit user action.
-- [ ] Invalid rows are skipped with row number, field, and reason.
-- [ ] Loop/cycle structures are preserved unless invalid references exist.
+- [x] Excel and JSON imports can run in preview mode.
+- [x] The preview shows nodes, connections, skipped rows, and warnings.
+- [x] Applying preview is explicit user action.
+- [x] Invalid rows are skipped with row number, field, and reason.
+- [x] Loop/cycle structures are preserved unless invalid references exist.
 
 ## Verification
 
@@ -29,3 +29,14 @@ Functional:
 - Import a valid Excel file and confirm preview before applying.
 - Import an Excel file with a missing node reference and verify skipped-row report.
 - Import looped data and confirm the loop is preserved.
+
+## QA Acceptance
+
+Result: **Accepted** on 2026-07-16.
+
+- Preview pipeline is a pure module and is invokable through Extension Kernel.
+- JSON/VSO, generic Excel, embedded Excel project, and editable Excel project paths show preview before applying.
+- Cancel and Escape leave the captured document snapshot unchanged.
+- Missing references and invalid IDs include row, field, and reason.
+- Valid two-node cycles remain two connections after explicit apply.
+- Syntax passed; Vitest 73/73; Playwright 22/22.

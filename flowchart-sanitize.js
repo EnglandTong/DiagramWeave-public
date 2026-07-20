@@ -64,6 +64,11 @@
     return Math.min(max, Math.max(min, v));
   }
 
+  function sanitizeTextColor(value) {
+    if (value == null || value === '' || value === 'auto') return 'auto';
+    return sanitizeHexColor(value, 'auto');
+  }
+
   function sanitizeNode(raw, index, idMap) {
     if (!raw || typeof raw !== 'object') return null;
 
@@ -87,8 +92,10 @@
       label: sanitizeTextField(raw.label) || '未命名',
       fillColor: sanitizeHexColor(raw.fillColor, DEFAULT_FILL),
       strokeColor: sanitizeHexColor(raw.strokeColor, DEFAULT_STROKE),
+      textColor: sanitizeTextColor(raw.textColor),
       detail: sanitizeTextField(raw.detail, 2000),
       duration: sanitizeNum(raw.duration, 0, 999999, 0),
+      waitDays: sanitizeNum(raw.waitDays ?? raw.waitDuration, 0, 999999, 0),
       role: sanitizeTextField(raw.role, 200),
       layer: sanitizeNum(raw.layer, 0, 999, 0),
       targetPageId: raw.targetPageId ? sanitizeTextField(raw.targetPageId, 80) : null,
@@ -96,6 +103,8 @@
 
     if (raw.lane !== undefined) node.lane = sanitizeNum(raw.lane, 0, 999, 0);
     if (raw.laneLabel) node.laneLabel = sanitizeTextField(raw.laneLabel, 200);
+    if (Array.isArray(raw.tags)) node.tags = raw.tags.slice(0, 20).map(tag => sanitizeTextField(tag, 80)).filter(Boolean);
+    else if (typeof raw.tags === 'string') node.tags = raw.tags.split(',').slice(0, 20).map(tag => sanitizeTextField(tag.trim(), 80)).filter(Boolean);
 
     return node;
   }
@@ -121,8 +130,11 @@
     };
 
     if (raw.labelPos != null) {
-      conn.labelPos = sanitizeNum(raw.labelPos, 0, 1, 0.5);
+      conn.labelPos = typeof raw.labelPos === 'string'
+        ? (['auto', 'above', 'right', 'custom'].includes(raw.labelPos) ? raw.labelPos : 'auto')
+        : sanitizeNum(raw.labelPos, 0, 1, 0.5);
     }
+    if (typeof DiagramWeaveRoutingRules !== 'undefined') Object.assign(conn, DiagramWeaveRoutingRules.normalizeConnectionRouting(raw));
 
     return conn;
   }
@@ -157,7 +169,7 @@
       ? rawLayers.slice(0, 50).map((l, i) => sanitizeLayer(l, i))
       : [{ id: 0, name: '图层 1', visible: true, locked: false }];
 
-    return {
+    const page = {
       id: sanitizeTextField(raw.id, 80) || ('page_' + (pageIndex + 1)),
       name: sanitizeTextField(raw.name) || ('页面 ' + (pageIndex + 1)),
       nodes,
@@ -165,6 +177,8 @@
       layers,
       nextLayerId: sanitizeNum(raw.nextLayerId, 1, 9999, layers.length),
     };
+    if (raw.slaDays != null && Number(raw.slaDays) > 0) page.slaDays = sanitizeNum(raw.slaDays, 0.01, 999999, 1);
+    return page;
   }
 
   /**
@@ -180,6 +194,9 @@
     }
 
     const connRouteMode = VALID_CONN_MODES.has(data.connRouteMode) ? data.connRouteMode : undefined;
+    const routingRules = typeof DiagramWeaveRoutingRules !== 'undefined'
+      ? DiagramWeaveRoutingRules.normalizeRules(data.routingRules)
+      : undefined;
 
     if (data.version === 2 && Array.isArray(data.pages)) {
       const pages = data.pages.slice(0, MAX_PAGES).map((p, i) => sanitizePage(p, i)).filter(Boolean);
@@ -189,16 +206,30 @@
       let currentPageId = sanitizeTextField(data.currentPageId, 80);
       if (!pageIds.has(currentPageId)) currentPageId = pages[0].id;
 
-      return {
+      const document = {
         version: 2,
         projectName: sanitizeTextField(data.projectName, 80),
+        historyId: sanitizeTextField(data.historyId, 120),
         autosaveSeconds: sanitizeNum(data.autosaveSeconds, 5, 3600, 30),
         pages,
         currentPageId,
         nextPageId: sanitizeNum(data.nextPageId, 1, 99999, pages.length + 1),
         nextId: sanitizeNum(data.nextId, 1, 999999, 1),
         connRouteMode,
+        routingRules,
+        reviewThreads: Array.isArray(data.reviewThreads) ? data.reviewThreads.slice(0, 1000).filter(Boolean).map((thread, index) => ({
+          id: sanitizeTextField(thread.id, 120) || ('review_' + (index + 1)),
+          targetType: thread.targetType === 'connection' ? 'connection' : 'node',
+          targetId: sanitizeTextField(thread.targetId, 120),
+          status: ['pending', 'approved', 'changes_requested', 'resolved'].includes(thread.status) ? thread.status : 'pending',
+          comments: Array.isArray(thread.comments) ? thread.comments.slice(0, 500).filter(Boolean).map((comment, commentIndex) => ({
+            id: sanitizeTextField(comment.id, 120) || ('comment_' + (commentIndex + 1)),
+            author: sanitizeTextField(comment.author, 120), body: sanitizeTextField(comment.body, 5000), createdAt: sanitizeTextField(comment.createdAt, 80),
+          })) : [],
+        })) : [],
       };
+      if (data.slaDays != null && Number(data.slaDays) > 0) document.slaDays = sanitizeNum(data.slaDays, 0.01, 999999, 1);
+      return document;
     }
 
     if (Array.isArray(data.nodes) && Array.isArray(data.connections)) {
@@ -213,11 +244,13 @@
       return {
         version: 1,
         projectName: sanitizeTextField(data.projectName, 80),
+        historyId: sanitizeTextField(data.historyId, 120),
         autosaveSeconds: sanitizeNum(data.autosaveSeconds, 5, 3600, 30),
         nodes: page.nodes,
         connections: page.connections,
         nextId: sanitizeNum(data.nextId, 1, 999999, page.nodes.length + 1),
         connRouteMode,
+        routingRules,
       };
     }
 
@@ -228,6 +261,7 @@
     sanitizeFlowDocument,
     sanitizeTextField,
     sanitizeHexColor,
+    sanitizeTextColor,
     sanitizeShape,
     registerShape,
     registerConnMode,

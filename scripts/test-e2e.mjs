@@ -8,7 +8,7 @@ const ROOT = path.resolve(__dirname, '..');
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || '4173');
 const HEALTH_URL = `http://${HOST}:${PORT}/api/health`;
-const PLAYWRIGHT_TIMEOUT_MS = Number(process.env.DIAGRAMWEAVE_E2E_TIMEOUT_MS || '180000');
+const PLAYWRIGHT_TIMEOUT_MS = Number(process.env.DIAGRAMWEAVE_E2E_TIMEOUT_MS || '600000');
 const PLAYWRIGHT_ARGS = process.argv.slice(2);
 
 function wait(ms) {

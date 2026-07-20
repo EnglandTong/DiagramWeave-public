@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DiagramWeave - 流程图编辑器</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232563eb'/%3E%3Cpath d='M18 16h12v12H18zM34 36h12v12H34zM30 22h8v20h-8z' fill='none' stroke='white' stroke-width='5' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="diagramweave-ui-redesign/colors_and_type.css">
 <link rel="stylesheet" href="flowchart-editor.css">
 </head>
 <body>
@@ -106,6 +107,12 @@
   <button class="toolbar-btn icon-only toolbar-hide-in-present" onclick="showSettingsDialog()" data-i18n-title="toolbar.settings">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
   </button>
+  <button class="toolbar-btn icon-only tablet-drawer-toggle" onclick="togglePanelDrawer('shapes')" aria-label="打开图形面板">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+  </button>
+  <button class="toolbar-btn icon-only tablet-drawer-toggle" onclick="togglePanelDrawer('properties')" aria-label="打开属性面板">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="18" r="2"/></svg>
+  </button>
 
   <!-- 演示模式工具栏控制 -->
   <div class="toolbar-present-controls" id="presentToolbarControls">
@@ -135,6 +142,12 @@
 </div>
 
 <div class="page-tabs-bar" id="pageTabs"></div>
+<nav class="mobile-mode-bar" aria-label="移动查看工具">
+  <button type="button" onclick="fitAllNodes()" aria-label="适应全部">适应</button>
+  <button type="button" onclick="openCommandPalette()" aria-label="搜索流程">搜索</button>
+  <button type="button" onclick="enterPresentation()" aria-label="开始演示">演示</button>
+  <button type="button" onclick="openMobileReview()" aria-label="打开审阅">审阅</button>
+</nav>
 
 <!-- 主布局 -->
 <div class="main-layout">
@@ -148,6 +161,9 @@
     </button>
 
     <div class="sidebar-header" data-i18n="sidebar.shapes">图形</div>
+    <div class="shape-search-wrap">
+      <input id="shapeLibrarySearch" class="shape-search" type="search" placeholder="搜索图形" aria-label="搜索图形" oninput="filterShapeLibrary(this.value)">
+    </div>
 
     <div class="sidebar-section">
       <div class="sidebar-section-title" data-i18n="sidebar.basic">基本图形</div>
@@ -316,8 +332,46 @@
   </aside>
 
   <!-- 画布区域 -->
-  <div class="canvas-wrapper" id="canvasWrapper">
+  <div class="canvas-wrapper" id="canvasWrapper" tabindex="-1">
     <div class="canvas-grid-bg"></div>
+    <div class="canvas-empty-state" id="canvasEmptyState">
+      <h2>开始创建流程</h2>
+      <div class="canvas-empty-actions">
+        <button type="button" onclick="showTemplateDialog()">从模板开始</button>
+        <button type="button" onclick="triggerProjectExcelUpload()">导入文件</button>
+        <button type="button" onclick="dismissCanvasEmptyState()">空白画布</button>
+      </div>
+    </div>
+    <div class="canvas-nav-toolbar" aria-label="画布导航">
+      <button type="button" onclick="fitAllNodes()" title="适应全部" aria-label="适应全部">⌗</button>
+      <button type="button" onclick="fitSelectedNodes()" title="适应选区" aria-label="适应选区">▣</button>
+      <button type="button" onclick="zoomReset()" title="100%" aria-label="缩放至 100%">100%</button>
+      <button type="button" onclick="toggleOutlinePanel()" title="Outline" aria-label="打开节点大纲">☷</button>
+      <select id="alignNodesSelect" aria-label="对齐所选节点" onchange="runAlignCommand(this.value);this.value=''">
+        <option value="">对齐</option>
+        <option value="left">左对齐</option><option value="center">水平居中</option><option value="right">右对齐</option>
+        <option value="top">顶部对齐</option><option value="middle">垂直居中</option><option value="bottom">底部对齐</option>
+      </select>
+      <select id="distributeNodesSelect" aria-label="等距分布所选节点" onchange="runDistributeCommand(this.value);this.value=''">
+        <option value="">分布</option><option value="horizontal">水平等距</option><option value="vertical">垂直等距</option>
+      </select>
+    </div>
+    <aside class="outline-panel" id="outlinePanel" aria-label="节点大纲">
+      <div class="outline-header"><strong>Outline</strong><button type="button" onclick="toggleOutlinePanel(false)" aria-label="关闭节点大纲">&times;</button></div>
+      <input id="outlineSearch" type="search" placeholder="搜索节点" aria-label="搜索节点" oninput="renderOutlinePanel()">
+      <div class="outline-filters">
+        <select id="outlineRoleFilter" aria-label="按角色筛选" onchange="renderOutlinePanel()"><option value="">全部角色</option></select>
+        <select id="outlineShapeFilter" aria-label="按形状筛选" onchange="renderOutlinePanel()"><option value="">全部形状</option></select>
+      </div>
+      <div id="outlineNodeList" class="outline-node-list"></div>
+    </aside>
+    <canvas id="canvasMinimap" class="canvas-minimap" width="180" height="120" aria-label="画布小地图"></canvas>
+    <div id="nodeContextToolbar" class="node-context-toolbar" role="toolbar" aria-label="节点快捷操作" hidden>
+      <button type="button" onclick="setNodeFillColor('#DAEAF6')" aria-label="浅蓝填充" title="浅蓝填充">■</button>
+      <button type="button" onclick="setNodeFillColor('#FFF2CC')" aria-label="浅黄填充" title="浅黄填充">■</button>
+      <button type="button" onclick="duplicateSelected()" aria-label="复制节点" title="复制节点">⧉</button>
+      <button type="button" onclick="deleteSelected()" aria-label="删除节点" title="删除节点">×</button>
+    </div>
     <div class="canvas" id="canvas">
       <div class="canvas-transform" id="canvasTransform">
         <svg class="connections-layer" id="connectionsLayer"></svg>
@@ -456,6 +510,13 @@
       </div>
     </div>
     <div id="propsContent" style="display:none;">
+      <div class="property-tabs" role="tablist" aria-label="节点属性分类">
+        <button type="button" role="tab" aria-selected="true" data-property-tab="content" onclick="setPropertyTab('content')">内容</button>
+        <button type="button" role="tab" aria-selected="false" data-property-tab="flow" onclick="setPropertyTab('flow')">流程</button>
+        <button type="button" role="tab" aria-selected="false" data-property-tab="appearance" onclick="setPropertyTab('appearance')">外观</button>
+        <button type="button" role="tab" aria-selected="false" data-property-tab="data" onclick="setPropertyTab('data')">数据</button>
+      </div>
+      <div id="propertyBatchStatus" class="property-batch-status" hidden></div>
       <div class="prop-group">
         <div class="prop-group-title" data-i18n="props.flowContent">流程内容</div>
         <div class="prop-row">
@@ -501,10 +562,24 @@
         <div class="prop-row" style="flex-direction:column;align-items:stretch;gap:4px;">
           <span class="prop-label" data-i18n="prop.fill">填充色</span>
           <div class="color-swatch-grid" id="propFillSwatches"></div>
+          <label class="custom-color-row">自定义 <input id="propFillCustom" type="color" aria-label="自定义填充颜色" onchange="setNodeFillColor(this.value)"></label>
         </div>
         <div class="prop-row" style="flex-direction:column;align-items:stretch;gap:4px;margin-top:8px;">
           <span class="prop-label" data-i18n="prop.stroke">边框色</span>
           <div class="color-swatch-grid" id="propStrokeSwatches"></div>
+          <label class="custom-color-row">自定义 <input id="propStrokeCustom" type="color" aria-label="自定义边框颜色" onchange="setNodeStrokeColor(this.value)"></label>
+        </div>
+        <div class="prop-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:8px;">
+          <label class="prop-label" for="propTextColorMode">文字色</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select class="prop-input" id="propTextColorMode" onchange="updatePropTextColor(this.value)" style="flex:1;">
+              <option value="auto">自动对比</option>
+              <option value="#111320">深色文字</option>
+              <option value="#ffffff">浅色文字</option>
+              <option value="custom">自定义</option>
+            </select>
+            <input id="propTextColorCustom" type="color" value="#ffffff" aria-label="自定义节点文字颜色" onchange="updatePropTextColor(this.value)" style="width:36px;height:32px;">
+          </div>
         </div>
       </div>
       <div class="prop-group" id="propTimeSummary" style="display:none;">
@@ -558,7 +633,73 @@
     </button>
     <div class="template-dialog-title" data-i18n="dialog.template.title">选择流程模板</div>
     <div class="template-dialog-subtitle" data-i18n="dialog.template.sub">点击模板一键生成流程图，生成后可自由编辑</div>
+    <div class="template-center-controls">
+      <input id="templateCenterSearch" type="search" placeholder="搜索模板" aria-label="搜索模板" oninput="renderTemplateCenter()">
+      <select id="templateCenterCategory" aria-label="模板分类" onchange="renderTemplateCenter()"><option value="">全部分类</option></select>
+      <label><input id="templateFavoritesOnly" type="checkbox" onchange="renderTemplateCenter()"> 收藏</label>
+    </div>
     <div class="template-dialog-grid" id="templateDialogGrid"></div>
+  </div>
+</div>
+
+<div class="command-palette-overlay" id="commandPaletteOverlay" onclick="if(event.target===this)closeCommandPalette()" aria-hidden="true">
+  <div class="command-palette" role="dialog" aria-modal="true" aria-labelledby="commandPaletteTitle">
+    <h2 id="commandPaletteTitle">命令面板</h2>
+    <input id="commandPaletteInput" type="search" placeholder="搜索命令、页面、节点或模板" aria-label="搜索命令" oninput="renderCommandPalette(this.value)">
+    <div id="commandPaletteResults" class="command-palette-results" role="listbox"></div>
+  </div>
+</div>
+
+<div class="import-preview-overlay" id="importPreviewOverlay" onclick="if(event.target===this)cancelImportPreview()" aria-hidden="true">
+  <div class="import-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="importPreviewTitle">
+    <div class="import-preview-header">
+      <div>
+        <h2 id="importPreviewTitle">导入预览</h2>
+        <p id="importPreviewSource">确认后才会修改当前画布</p>
+      </div>
+      <button type="button" class="dialog-close-btn" onclick="cancelImportPreview()" aria-label="关闭导入预览">&times;</button>
+    </div>
+    <div class="import-preview-summary" id="importPreviewSummary"></div>
+    <div class="import-preview-issues" id="importPreviewIssues" aria-live="polite"></div>
+    <div class="import-preview-actions">
+      <button type="button" onclick="cancelImportPreview()">取消</button>
+      <button type="button" class="primary" id="applyImportPreviewBtn" onclick="applyPendingImportPreview()">应用导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="mapping-wizard-overlay" id="mappingWizardOverlay" onclick="if(event.target===this)cancelMappingWizard()" aria-hidden="true">
+  <div class="mapping-wizard-dialog" role="dialog" aria-modal="true" aria-labelledby="mappingWizardTitle">
+    <div class="mapping-wizard-header">
+      <div>
+        <h2 id="mappingWizardTitle">字段映射</h2>
+        <p id="mappingWizardSource">选择来源列，然后生成导入预览</p>
+      </div>
+      <button type="button" class="dialog-close-btn" onclick="cancelMappingWizard()" aria-label="关闭字段映射">&times;</button>
+    </div>
+    <div class="mapping-preset-bar">
+      <label>预设<select id="mappingPresetSelect" onchange="loadSelectedMappingPreset(this.value)"></select></label>
+      <label>名称<input id="mappingPresetName" type="text" maxlength="60" placeholder="例如 ERP 导出"></label>
+      <button type="button" onclick="saveCurrentMappingPreset()">保存预设</button>
+    </div>
+    <div class="mapping-columns">
+      <section>
+        <h3>节点字段</h3>
+        <div id="nodeMappingFields" class="mapping-field-list"></div>
+      </section>
+      <section>
+        <h3>连线字段</h3>
+        <div id="connectionMappingFields" class="mapping-field-list"></div>
+      </section>
+    </div>
+    <div class="mapping-options">
+      <label><input id="mappingAutoLayout" type="checkbox"> 应用后自动布局</label>
+      <span id="mappingValidation" role="alert"></span>
+    </div>
+    <div class="mapping-wizard-actions">
+      <button type="button" onclick="cancelMappingWizard()">取消</button>
+      <button type="button" class="primary" id="continueMappingBtn" onclick="continueMappingToPreview()">生成预览</button>
+    </div>
   </div>
 </div>
 
@@ -617,6 +758,100 @@
 <input type="file" id="fileInput" accept=".json,.vso,.xlsx,.vsdx,.vsdm,.vsd,.vdx" style="display:none" onchange="handleFileLoad(event)">
 <input type="file" id="excelInput" accept=".xlsx,.xls" style="display:none" onchange="handleExcelLoad(event)">
 <input type="file" id="projectExcelInput" accept=".xlsx,.xls" style="display:none" onchange="handleProjectExcelLoad(event)">
+<input type="file" id="stencilPackInput" accept=".json" style="display:none" onchange="handleStencilPackImport(event)">
+<input type="file" id="mermaidFileInput" accept=".mmd,.mermaid,text/plain" style="display:none" onchange="processExternalDiagramFile(this.files[0],'mermaid');this.value=''">
+<input type="file" id="bpmnFileInput" accept=".bpmn,.xml,application/xml,text/xml" style="display:none" onchange="processExternalDiagramFile(this.files[0],'bpmn');this.value=''">
+
+<div class="confirm-overlay" id="stencilManagerOverlay" onclick="if(event.target===this)hideStencilManager()" aria-hidden="true">
+  <div class="confirm-dialog stencil-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="stencilManagerTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideStencilManager()" aria-label="Close stencil manager">&times;</button>
+    <div class="confirm-title" id="stencilManagerTitle">Stencil Manager / 图形包管理</div>
+    <p class="settings-hint">Import local JSON packs containing safe SVG shapes.</p>
+    <div id="stencilPackIssues" class="stencil-pack-issues" role="alert"></div>
+    <div id="stencilPackList" class="stencil-pack-list"></div>
+    <div class="settings-actions">
+      <button type="button" class="toolbar-btn primary" onclick="document.getElementById('stencilPackInput').click()">Import pack / 导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="routingRulesOverlay" onclick="if(event.target===this)hideRoutingRulesPanel()" aria-hidden="true">
+  <div class="confirm-dialog routing-rules-dialog" role="dialog" aria-modal="true" aria-labelledby="routingRulesTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideRoutingRulesPanel()" aria-label="Close connection rules">&times;</button>
+    <div class="confirm-title" id="routingRulesTitle">Connection Rules / 连线规则</div>
+    <div class="routing-rule-grid">
+      <label><span>Lock endpoint ports</span><input id="routingEndpointLock" type="checkbox" onchange="updateRoutingRulesFromPanel()"></label>
+      <label><span>Obstacle padding</span><input id="routingObstaclePadding" type="number" min="0" max="80" onchange="updateRoutingRulesFromPanel()"></label>
+      <label><span>Bridge behavior</span><select id="routingBridgeBehavior" onchange="updateRoutingRulesFromPanel()"><option value="jump">Jump</option><option value="gap">Gap</option><option value="none">None</option></select></label>
+      <label><span>Bridge size</span><input id="routingBridgeSize" type="number" min="4" max="24" onchange="updateRoutingRulesFromPanel()"></label>
+      <label><span>Default label</span><select id="routingDefaultLabel" onchange="updateRoutingRulesFromPanel()"><option value="auto">Auto</option><option value="above">Above</option><option value="right">Right</option><option value="custom">Custom</option></select></label>
+    </div>
+    <section class="routing-connection-section">
+      <h3>Selected connection</h3>
+      <div id="routingNoConnection" class="settings-hint">Select a connection to edit waypoints.</div>
+      <div id="routingConnectionControls" hidden>
+        <label>Label placement <select id="routingConnLabel" onchange="updateSelectedConnectionRouting()"><option value="auto">Auto</option><option value="above">Above</option><option value="right">Right</option><option value="custom">Custom</option></select></label>
+        <div class="routing-offsets"><label>X <input id="routingLabelOffsetX" type="number" onchange="updateSelectedConnectionRouting()"></label><label>Y <input id="routingLabelOffsetY" type="number" onchange="updateSelectedConnectionRouting()"></label></div>
+        <div id="routingWaypointList" class="routing-waypoint-list"></div>
+        <button type="button" onclick="addSelectedConnectionWaypoint()">Add waypoint</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="versionHistoryOverlay" onclick="if(event.target===this)hideVersionHistory()" aria-hidden="true">
+  <div class="confirm-dialog version-history-dialog" role="dialog" aria-modal="true" aria-labelledby="versionHistoryTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideVersionHistory()" aria-label="Close version history">&times;</button>
+    <div class="confirm-title" id="versionHistoryTitle">Version History / 版本历史</div>
+    <p class="settings-hint">Snapshots are stored locally in this browser.</p>
+    <div class="settings-actions"><button type="button" class="toolbar-btn primary" onclick="createNamedVersionSnapshot()">Create snapshot</button><button type="button" class="toolbar-btn" onclick="clearVersionHistory()">Clear all</button></div>
+    <div id="versionHistoryList" class="version-history-list" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="qualityCheckerOverlay" onclick="if(event.target===this)hideQualityChecker()" aria-hidden="true">
+  <div class="confirm-dialog quality-checker-dialog" role="dialog" aria-modal="true" aria-labelledby="qualityCheckerTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideQualityChecker()" aria-label="Close quality checker">&times;</button>
+    <div class="confirm-title" id="qualityCheckerTitle">Process Quality / 流程质量</div>
+    <div id="qualityCheckerSummary" class="quality-checker-summary"></div>
+    <div id="qualityCheckerList" class="quality-checker-list"></div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="processAnalysisOverlay" onclick="if(event.target===this)hideProcessAnalysis()" aria-hidden="true">
+  <div class="confirm-dialog process-analysis-dialog" role="dialog" aria-modal="true" aria-labelledby="processAnalysisTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideProcessAnalysis()" aria-label="Close process analysis">&times;</button>
+    <div class="confirm-title" id="processAnalysisTitle">Process Analysis / 流程分析</div>
+    <div id="processAnalysisSummary" class="quality-checker-summary" aria-live="polite"></div>
+    <div id="processAnalysisList" class="process-analysis-list"></div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="reviewOverlay" onclick="if(event.target===this)hideReviewPanel()" aria-hidden="true">
+  <div class="confirm-dialog review-dialog" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideReviewPanel()" aria-label="Close review">&times;</button>
+    <div class="confirm-title" id="reviewTitle">Comments and Review / 评论审阅</div>
+    <div id="reviewTargetSummary" class="quality-checker-summary"></div>
+    <form id="reviewComposer" class="review-composer" onsubmit="createSelectedReviewThread(event)">
+      <input id="reviewAuthor" maxlength="120" placeholder="Author / 作者" aria-label="Comment author">
+      <textarea id="reviewBody" maxlength="5000" required placeholder="Comment / 评论" aria-label="Comment body"></textarea>
+      <button type="submit" class="toolbar-btn primary">New thread / 新建线程</button>
+    </form>
+    <div id="reviewList" class="review-list" aria-live="polite"></div>
+  </div>
+</div>
+
+<div class="confirm-overlay" id="aiSettingsOverlay" onclick="if(event.target===this)hideAISettings()" aria-hidden="true">
+  <div class="confirm-dialog ai-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="aiSettingsTitle">
+    <button type="button" class="dialog-close-btn" onclick="hideAISettings()" aria-label="Close AI settings">&times;</button>
+    <div class="confirm-title" id="aiSettingsTitle">AI Provider Settings / AI 提供者设置</div>
+    <label class="ai-global-toggle"><input id="aiGlobalEnabled" type="checkbox" onchange="setGlobalAIState(this.checked)"> Enable AI providers for this session / 本次会话启用 AI</label>
+    <p class="settings-hint">Disabled by default. No provider, key, or endpoint is bundled or stored.</p>
+    <div id="aiProviderList" class="ai-provider-list"></div>
+    <label class="prop-label" for="aiDataPreview">Exact local data preview / 本地数据预览</label>
+    <pre id="aiDataPreview" class="ai-data-preview"></pre>
+  </div>
+</div>
 
 <!-- Excel 数据导入导出 -->
 <div class="confirm-overlay" id="excelDataOverlay" onclick="if(event.target===this)hideExcelDataDialog()">
@@ -684,7 +919,16 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/><path d="M8 15h8"/><path d="M8 18h5"/></svg>
         <span data-i18n="dialog.export.vso">VSO 工作档案</span>
       </button>
+      <button type="button" class="export-format-btn" onclick="runExport('vsdx')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3h10l4 4v14H5z"/><path d="M15 3v5h4"/><path d="M8 13h8M8 17h6"/></svg>
+        <span>VSDX (controlled)</span>
+      </button>
+      <button type="button" class="export-format-btn" onclick="runExport('viewer')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></svg>
+        <span>HTML Viewer</span>
+      </button>
     </div>
+    <label class="export-history-option"><input type="checkbox" id="exportIncludeHistory"> Include local version history / 包含版本历史</label>
   </div>
 </div>
 
@@ -730,6 +974,7 @@
       <button type="button" class="toolbar-btn" onclick="saveSettingsFromDialog()" data-i18n="dialog.settings.save">保存设置</button>
       <button type="button" class="toolbar-btn" onclick="syncContentPackFromSettings()" data-i18n="dialog.settings.syncPack">同步内容包</button>
       <button type="button" class="toolbar-btn" onclick="runUpdateCheckFromSettings()" data-i18n="dialog.settings.checkUpdate">检查更新</button>
+      <button type="button" class="toolbar-btn" onclick="hideSettingsDialog();showStencilManager()">Stencil Manager / 图形包</button>
       <button type="button" class="toolbar-btn primary" id="settingsOpenReleaseBtn" onclick="openReleasePageFromSettings()" data-i18n="dialog.settings.openRelease">打开下载页</button>
     </div>
     <p class="settings-footnote" data-i18n="dialog.settings.footnote">Git 用户可双击 update-diagramweave.bat 一键拉取；ZIP 用户请在下载页获取新版本。</p>
@@ -823,7 +1068,7 @@
         <button type="button" onclick="deleteFlowTableSelectedRows('connections')" title="先点击行选中（高亮），再删除">删连线</button>
       </div>
     </div>
-    <div class="flow-table-scroll">
+    <div class="flow-table-scroll" tabindex="0" aria-label="流程数据表">
       <table class="flow-data-table" id="flowNodeTable">
         <thead>
           <tr>
@@ -870,11 +1115,27 @@
 <script src="vendor/svg2pdf.umd.min.js"></script>
 <script src="diagramweave-bootstrap.js"></script>
 <script src="flowchart-sanitize.js"></script>
+<script src="diagramweave-import-preview.js"></script>
+<script src="diagramweave-field-mapping.js"></script>
+<script src="diagramweave-canvas-tools.js"></script>
+<script src="diagramweave-shape-library.js"></script>
+<script src="diagramweave-property-tools.js"></script>
+<script src="diagramweave-template-center.js"></script>
+<script src="diagramweave-stencil-manager.js"></script>
+<script src="diagramweave-routing-rules.js"></script>
+<script src="diagramweave-history.js"></script>
+<script src="diagramweave-node-colors.js"></script>
+<script src="diagramweave-commands.js"></script>
+<script src="diagramweave-process-analysis.js"></script>
+<script src="diagramweave-offline-viewer.js"></script>
+<script src="diagramweave-contracts.js"></script>
 <script src="diagramweave-i18n.js"></script>
 <script src="diagramweave-content-pack.js"></script>
 <script src="flowchart-export-shapes.js"></script>
 <script src="diagramweave-extension-kernel.js"></script>
+<script src="diagramweave-external-importers.js"></script>
 <script src="diagramweave-visio-preview.js"></script>
+<script src="diagramweave-visio-bridge.js"></script>
 <script src="flowchart-extensions.js"></script>
 <script src="flowchart-editor.js"></script>
 </body>

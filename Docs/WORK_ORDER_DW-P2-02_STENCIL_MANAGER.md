@@ -11,11 +11,11 @@ Add a stencil manager for custom SVG/icon/industry shape packs.
 
 ## Acceptance Criteria
 
-- [ ] User can import a local stencil pack.
-- [ ] Pack schema validates before use.
-- [ ] Imported shapes appear in the shape sidebar by category.
-- [ ] User can enable, disable, rename, and export packs.
-- [ ] Malformed SVG or unsafe content is rejected.
+- [x] User can import a local stencil pack.
+- [x] Pack schema validates before use.
+- [x] Imported shapes appear in the shape sidebar by category.
+- [x] User can enable, disable, rename, and export packs.
+- [x] Malformed SVG or unsafe content is rejected.
 
 ## Verification
 
@@ -29,3 +29,13 @@ Functional:
 - Import a valid SVG pack.
 - Reject an invalid pack with a clear message.
 - Add a custom shape to the canvas.
+
+## QA Acceptance
+
+Accepted: 2026-07-16
+
+- Syntax check: passed.
+- Vitest: 22 files, 92 tests passed.
+- Playwright: 47 tests passed, including 2 Stencil Manager lifecycle/security scenarios.
+- Safety: unsafe SVG is rejected before storage, registry, sidebar, or canvas mutation.
+- Compatibility: disabling a pack unregisters only that pack; existing editor and remote content-pack flows remain green.

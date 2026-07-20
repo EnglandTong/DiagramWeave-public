@@ -23,14 +23,19 @@
   "packageManager": "pnpm@11.5.2",
   "type": "module",
   "dependencies": {
+    "bpmn-moddle": "^10.0.0",
     "dagre": "^0.8.5",
+    "fflate": "^0.8.3",
     "jspdf": "^4.2.1",
+    "mermaid": "^11.16.0",
     "svg2pdf.js": "^2.7.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.52.0",
     "electron": "^42.4.0",
+    "esbuild": "^0.28.1",
     "vitest": "^3.2.4"
   }
 }

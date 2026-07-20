@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'DiagramWeaveZh';
+  src: url('../vendor/fonts/NotoSansSC-Regular.otf') format('opentype'),
+       url('../vendor/fonts/NotoSansSC-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+
 /* ============================================
    DiagramWeave UI Redesign — Design Concept
    Style: Deep Modern Editor
@@ -15,7 +22,7 @@
   --bg-code: #1a1d2e;
 
   /* Accent — Indigo-Violet gradient identity */
-  --accent: #7c6aff;
+  --accent: #8b7fff;
   --accent-hover: #9488ff;
   --accent-dim: rgba(124, 106, 255, 0.12);
   --accent-glow: rgba(124, 106, 255, 0.25);
@@ -36,8 +43,8 @@
   /* Text tokens */
   --text-primary: #e8eaf2;
   --text-secondary: #9498b4;
-  --text-muted: #5e6280;
-  --text-on-accent: #ffffff;
+  --text-muted: #858aa8;
+  --text-on-accent: #11121c;
 
   /* Border tokens */
   --border: rgba(255, 255, 255, 0.06);
@@ -72,7 +79,7 @@
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Typography */
-  --font-sans: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'DiagramWeaveZh', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
   --font-display: 'Inter', system-ui, sans-serif;
 

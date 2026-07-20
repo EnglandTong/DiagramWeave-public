@@ -2,6 +2,7 @@
   "templates": [
     "starter-vertical.json",
     "approval-cycle.json",
+    "bpmn-approval.json",
     "swimlane-handoff.json",
     "fishbone-root-cause.json",
     "incident-response.json",

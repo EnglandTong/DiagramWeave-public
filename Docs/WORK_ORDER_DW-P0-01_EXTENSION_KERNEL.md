@@ -28,11 +28,17 @@ Out of scope:
 
 ## Acceptance Criteria
 
-- [ ] Extension metadata supports `id`, `name`, `version`, `kind`, `enabled`, `capabilities`, and `config`.
-- [ ] Existing import/export/template/routing registrations can be represented as built-in extensions.
-- [ ] Extension calls return `{ success, data, issues, warnings }`.
-- [ ] Invalid extension registration reports clear errors.
-- [ ] Existing user-visible behavior remains unchanged.
+- [x] Extension metadata supports `id`, `name`, `version`, `kind`, `enabled`, `capabilities`, and `config`.
+- [x] Existing import/export/template/routing registrations can be represented as built-in extensions.
+- [x] Extension calls return `{ success, data, issues, warnings }`.
+- [x] Invalid extension registration reports clear errors.
+- [x] Existing user-visible behavior remains unchanged.
+
+## QA Result
+
+Accepted on 2026-07-16 under `WORK_ORDER_DW-QA-20260716-01_GATE_REMEDIATION.md`.
+The registry enumerates enabled built-ins for importer, exporter, template,
+stencil, validator, routing, history, and AI provider boundaries.
 
 ## Verification
 

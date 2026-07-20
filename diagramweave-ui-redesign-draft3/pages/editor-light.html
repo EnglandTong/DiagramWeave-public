@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiagramWeave — 浅色模式编辑器</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style id="theme-vars">
+/* TRAE Work Design System — Light Theme Tokens */
+:root {
+  /* radius */
+  --radius-0: 0px; --radius-2: 2px; --radius-4: 4px; --radius-6: 6px;
+  --radius-8: 8px; --radius-10: 10px; --radius-12: 12px; --radius-16: 16px;
+  --radius-full: 999px; --radius-xs: var(--radius-2); --radius-sm: var(--radius-4);
+  --radius-md: var(--radius-6); --radius-lg: var(--radius-8); --radius-xl: var(--radius-10);
+  --border-width-default: 1px;
+  /* spacers */
+  --spacer-0: 0px; --spacer-2: 2px; --spacer-3: 3px; --spacer-4: 4px;
+  --spacer-6: 6px; --spacer-8: 8px; --spacer-10: 10px; --spacer-12: 12px;
+  --spacer-16: 16px; --spacer-20: 20px; --spacer-24: 24px; --spacer-32: 32px;
+  --spacer-40: 40px; --spacer-48: 48px; --spacer-64: 64px;
+  /* icon sizes */
+  --icon-size-12: 12px; --icon-size-14: 14px; --icon-size-16: 16px;
+  --icon-size-20: 20px; --icon-size-24: 24px;
+  /* font */
+  --font-family-default: "SF Pro Text", "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-heading: "SF Pro", "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-metric: "Inter", "SF Pro Text", "PingFang SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-weight-default: 400; --font-weight-code: 450;
+  --font-weight-medium: 500; --font-weight-strong: 600;
+  --font-family-base: var(--font-family-default);
+  --font-family-heading-alias: var(--font-family-heading);
+  --font-family-mono-alias: var(--font-family-mono);
+  /* body text styles */
+  --body-xs-font-size: 10px; --body-xs-line-height: 14px;
+  --body-sm-font-size: 11px; --body-sm-line-height: 16px;
+  --body-md-font-size: 12px; --body-md-line-height: 18px;
+  --body-base-font-size: 14px; --body-base-line-height: 20px;
+  --body-lg-font-size: 18px; --body-lg-line-height: 28px;
+  /* heading text styles */
+  --heading-3xs-font-size: 11px; --heading-2xs-font-size: 12px;
+  --heading-xs-font-size: 13px; --heading-sm-font-size: 16px;
+  --heading-md-font-size: 20px; --heading-lg-font-size: 22px;
+  /* bg */
+  --bg-base-default: #FFFFFF; --bg-base-secondary: #F5F5F5;
+  --bg-base-tertiary: #E5E5E5;
+  --bg-overlay-l1: rgba(115, 115, 115, 0.08);
+  --bg-overlay-l2: rgba(115, 115, 115, 0.12);
+  --bg-overlay-l3: rgba(115, 115, 115, 0.16);
+  --bg-overlay-l4: rgba(115, 115, 115, 0.20);
+  --bg-white: #FFFFFF; --bg-menu: #FFFFFF; --bg-tooltip: #FFFFFF;
+  --bg-invert: #262626; --bg-invert-hover: #404040; --bg-invert-active: #171717;
+  --bg-invert-disabled: rgba(115, 115, 115, 0.20);
+  --color-background: var(--bg-base-default);
+  --color-surface: var(--bg-base-secondary);
+  --color-card: var(--bg-base-secondary);
+  /* bg-brand */
+  --bg-brand: #4B3FE3; --bg-brand-hover: #6A6FFF;
+  --bg-brand-active: #3F31C6; --bg-brand-disabled: rgba(75, 63, 227, 0.22);
+  --bg-brand-popup: rgba(170, 183, 255, 0.36);
+  --color-primary: var(--bg-brand);
+  --color-accent: var(--bg-brand);
+  /* text */
+  --text-default: #171717; --text-default-hover: #262626;
+  --text-default-active: #262626;
+  --text-secondary: #404040; --text-secondary-hover: #171717;
+  --text-secondary-active: #171717;
+  --text-tertiary: #737373; --text-disabled: #A1A1A1;
+  --text-onbrand: #FFFFFF; --text-onaccent: #FFFFFF;
+  --text-white: #FFFFFF; --text-brand: #4B3FE3;
+  --color-foreground: var(--text-default);
+  --color-muted-foreground: var(--text-secondary);
+  --color-disabled-foreground: var(--text-disabled);
+  --color-on-primary: var(--text-onbrand);
+  /* icon */
+  --icon-default: #262626; --icon-default-hover: #171717;
+  --icon-default-active: #171717; --icon-secondary: #404040;
+  --icon-secondary-hover: #262626; --icon-secondary-active: #262626;
+  --icon-tertiary: #737373; --icon-disabled: #A1A1A1;
+  --icon-onbrand: #FFFFFF; --icon-onaccent: #FFFFFF;
+  --icon-white: #FFFFFF; --icon-brand: #4B3FE3;
+  --icon-brand-hover: #6A6FFF;
+  /* border */
+  --border-neutral-l1: rgba(115, 115, 115, 0.12);
+  --border-neutral-l2: rgba(115, 115, 115, 0.18);
+  --border-neutral-l3: rgba(115, 115, 115, 0.36);
+  --border-contrast: #000000; --border-brand: #4B3FE3;
+  --color-border: var(--border-neutral-l1);
+  --color-border-strong: var(--border-neutral-l2);
+  /* status */
+  --status-primary-default: #2F74FF; --status-primary-surface-l1: rgba(47, 116, 255, 0.12);
+  --status-success-default: #15A877;
+  --status-success-surface-l1: rgba(64, 176, 139, 0.12);
+  --status-alert-default: #FEA900;
+  --status-alert-surface-l1: rgba(254, 169, 0, 0.14);
+  --status-warning-default: #E27900;
+  --status-warning-surface-l1: rgba(226, 121, 0, 0.12);
+  --status-error-default: #E8463A;
+  --status-error-surface-l1: rgba(232, 70, 58, 0.12);
+  --status-error-surface-l2: rgba(232, 70, 58, 0.16);
+  --color-info: var(--status-primary-default);
+  --color-success: var(--status-success-default);
+  --color-warning: var(--status-warning-default);
+  --color-error: var(--status-error-default);
+  /* brand scale */
+  --brand-100: #E5EAFF; --brand-200: #CFD8FF; --brand-300: #AAB7FF;
+  --brand-400: #8894FF; --brand-500: #6A6FFF; --brand-600: #4B3FE3;
+  --brand-700: #3F31C6; --brand-800: #2C2290;
+  /* viz */
+  --viz-series-brand: #4B3FE3; --viz-series-coral: #F87454;
+  --viz-series-mint: #1DC981; --viz-series-amber: #EDAA45;
+  --viz-series-sky: #22A5F7; --viz-series-violet: #B655FC;
+  /* layout aliases */
+  --bg-layout-1: var(--bg-base-secondary);
+  --bg-layout-2: var(--bg-overlay-l1);
+  --border-1: var(--border-neutral-l1);
+  color: var(--text-default);
+  background: var(--bg-base-default);
+  font-family: var(--font-family-default);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* TRAE Work Design System — Dark Theme Tokens */
+.dark {
+  --bg-base-default: #1a1a1a;
+  --bg-base-secondary: #242424;
+  --bg-base-tertiary: #2e2e2e;
+  --bg-overlay-l1: rgba(255,255,255,0.06);
+  --bg-overlay-l2: rgba(255,255,255,0.10);
+  --bg-overlay-l3: rgba(255,255,255,0.14);
+  --bg-overlay-l4: rgba(255,255,255,0.18);
+  --bg-white: #1a1a1a;
+  --bg-menu: #2e2e2e;
+  --bg-tooltip: #2e2e2e;
+  --bg-invert: #f5f5f5;
+  --bg-invert-hover: #e5e5e5;
+  --bg-invert-active: #ffffff;
+  --bg-brand: #6a6fff;
+  --bg-brand-hover: #8894ff;
+  --bg-brand-active: #4b3fe3;
+  --bg-brand-disabled: rgba(106,111,255,0.22);
+  --bg-brand-popup: rgba(106,111,255,0.36);
+  --text-default: #e5e5e5;
+  --text-default-hover: #f5f5f5;
+  --text-default-active: #f5f5f5;
+  --text-secondary: #a1a1a1;
+  --text-secondary-hover: #e5e5e5;
+  --text-secondary-active: #e5e5e5;
+  --text-tertiary: #737373;
+  --text-disabled: #525252;
+  --text-onbrand: #ffffff;
+  --text-onaccent: #ffffff;
+  --text-white: #1a1a1a;
+  --text-brand: #aab7ff;
+  --text-brand-hover: #cfd8ff;
+  --icon-default: #e5e5e5;
+  --icon-default-hover: #f5f5f5;
+  --icon-default-active: #f5f5f5;
+  --icon-secondary: #a1a1a1;
+  --icon-secondary-hover: #e5e5e5;
+  --icon-secondary-active: #e5e5e5;
+  --icon-tertiary: #737373;
+  --icon-disabled: #525252;
+  --icon-onbrand: #ffffff;
+  --icon-onaccent: #ffffff;
+  --icon-white: #1a1a1a;
+  --icon-brand: #aab7ff;
+  --icon-brand-hover: #cfd8ff;
+  --border-neutral-l1: rgba(255,255,255,0.08);
+  --border-neutral-l2: rgba(255,255,255,0.14);
+  --border-neutral-l3: rgba(255,255,255,0.28);
+  --border-contrast: #ffffff;
+  --border-brand: #6a6fff;
+  --color-background: #1a1a1a;
+  --color-surface: #242424;
+  --color-surface-variant: #2e2e2e;
+  --color-card: #242424;
+  --color-tooltip: #2e2e2e;
+  --color-menu: #2e2e2e;
+  --color-border: rgba(255,255,255,0.08);
+  --color-border-strong: rgba(255,255,255,0.14);
+  --color-border-stronger: rgba(255,255,255,0.28);
+  --color-border-contrast: #ffffff;
+  --color-foreground: #e5e5e5;
+  --color-foreground-hover: #f5f5f5;
+  --color-on-surface: #e5e5e5;
+  --color-on-surface-variant: #a1a1a1;
+  --color-muted-foreground: #a1a1a1;
+  --color-disabled-foreground: #525252;
+  --color-on-primary: #ffffff;
+  --status-primary-default: #4c88ff;
+  --status-success-default: #2fb287;
+  --status-error-default: #ea574c;
+  --status-alert-default: #ffb700;
+  --status-warning-default: #f39a35;
+  --viz-series-brand: #6a6fff;
+  --viz-series-brand-soft: rgba(106,111,255,0.36);
+  --viz-series-brand-mid: #8894ff;
+  --viz-ui-bg-chart: #1a1a1a;
+  --viz-ui-bg-tooltip: #2e2e2e;
+  --viz-ui-chart-title: #e5e5e5;
+  --viz-ui-chart-subtitle: #a1a1a1;
+  --viz-ui-chart-axis: rgba(255,255,255,0.14);
+  --viz-ui-chart-tick: #a1a1a1;
+  --viz-ui-legend-label: #a1a1a1;
+  --viz-ui-legend-value: #e5e5e5;
+  color: var(--text-default);
+  background: var(--bg-base-default);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+    </style>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-bg-base-default: var(--bg-base-default);
+    --color-bg-base-secondary: var(--bg-base-secondary);
+    --color-bg-base-tertiary: var(--bg-base-tertiary);
+    --color-bg-overlay-l1: var(--bg-overlay-l1);
+    --color-bg-overlay-l2: var(--bg-overlay-l2);
+    --color-bg-overlay-l3: var(--bg-overlay-l3);
+    --color-bg-menu: var(--bg-menu);
+    --color-bg-brand: var(--bg-brand);
+    --color-bg-invert: var(--bg-invert);
+    --color-text-default: var(--text-default);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-tertiary: var(--text-tertiary);
+    --color-text-disabled: var(--text-disabled);
+    --color-text-brand: var(--text-brand);
+    --color-bg-foreground: var(--text-default);
+    --color-border-theme: var(--border-neutral-l1);
+    --color-border-strong: var(--border-neutral-l2);
+    --color-status-success: var(--status-success-default);
+    --color-status-warning: var(--status-warning-default);
+    --color-status-error: var(--status-error-default);
+    --color-status-alert: var(--status-alert-default);
+    --color-status-info: var(--status-primary-default);
+    --color-viz-brand: var(--viz-series-brand);
+    --color-viz-coral: var(--viz-series-coral);
+    --color-viz-sky: var(--viz-series-sky);
+    --color-viz-amber: var(--viz-series-amber);
+    --color-viz-mint: var(--viz-series-mint);
+  }
+  @layer base {
+    body { background: var(--bg-base-secondary); color: var(--text-default); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+    .bg-primary { background-color: var(--bg-brand); }
+    .text-foreground { color: var(--text-default); }
+    .text-muted-foreground { color: var(--text-secondary); }
+    .bg-card { background-color: var(--bg-base-secondary); }
+    .bg-surface { background-color: var(--bg-base-secondary); }
+    .border-border { border-color: var(--border-neutral-l1); }
+    </style>
+    <style id="component-vars">
+/* TraeWork component classes */
+.ds-menu { display: flex; flex-direction: column; gap: var(--spacer-2); background: var(--bg-menu); border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-12); padding: var(--spacer-8); min-width: 180px; color: var(--text-default); box-shadow: 0 12px 32px color-mix(in srgb, var(--text-default) 12%, transparent), 0 2px 8px color-mix(in srgb, var(--text-default) 8%, transparent); }
+.ds-menu__item { display: flex; align-items: center; gap: var(--spacer-8); min-height: 32px; padding: var(--spacer-6) var(--spacer-8); border-radius: var(--radius-8); color: var(--text-default); font-family: var(--body-base-font-family); font-size: var(--body-base-font-size); line-height: var(--body-base-line-height); font-weight: var(--font-weight-default); cursor: pointer; }
+.ds-menu__item:hover { background: var(--bg-overlay-l2); }
+.ds-menu__item--danger { color: var(--status-error-default); }
+.ds-menu__item--danger:hover { background: var(--status-error-surface-l1); }
+.ds-menu__divider { height: 1px; background: var(--border-neutral-l1); margin: var(--spacer-4) 0; }
+.ds-menu__shortcut { margin-left: auto; color: var(--text-tertiary); font-family: var(--body-md-font-family); font-size: var(--body-md-font-size); }
+.ds-kbd { display: inline-flex; align-items: center; padding: 0 var(--spacer-6); height: 20px; background: transparent; border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-8); font-family: var(--body-md-font-family); font-size: var(--body-md-font-size); color: var(--text-secondary); }
+.ds-switch { position: relative; display: inline-flex; width: 32px; height: 18px; background: var(--bg-overlay-l3); border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-full); cursor: pointer; transition: background .15s, border-color .15s; }
+.ds-switch input { display: none; }
+.ds-switch__thumb { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--bg-base-default); border-radius: var(--radius-full); transition: left .15s, background .15s; }
+.ds-switch input:checked ~ .ds-switch__thumb { left: 16px; background: var(--icon-onbrand); }
+.ds-switch:has(input:checked) { background: var(--bg-brand); border-color: var(--bg-brand); }
+.ds-input { display: flex; align-items: center; gap: var(--spacer-8); min-height: 32px; padding: 0 var(--spacer-12); background: var(--bg-base-default); border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-8); color: var(--text-default); width: 100%; font-family: var(--body-base-font-family); font-size: var(--body-base-font-size); line-height: var(--body-base-line-height); }
+.ds-input:focus-within { border-color: var(--border-contrast); background: var(--bg-base-default); }
+.ds-input input { flex: 1; background: transparent; border: none; outline: none; color: var(--text-default); font: inherit; min-width: 0; }
+.ds-input input::placeholder { color: var(--text-tertiary); }
+.ds-input__icon { color: var(--icon-secondary); display: inline-flex; align-items: center; }
+.ds-btn--ghost { display: inline-flex; align-items: center; justify-content: center; gap: var(--spacer-6); height: 28px; padding: 0 var(--spacer-12); border-radius: var(--radius-8); border: 1px solid transparent; background: transparent; color: var(--text-default); cursor: pointer; white-space: nowrap; font-family: var(--body-base-strong-font-family); font-size: var(--body-base-strong-font-size); font-weight: var(--font-weight-medium); transition: background .12s ease, color .12s ease; }
+.ds-btn--ghost:hover { background: var(--bg-overlay-l2); color: var(--text-default-hover); }
+.icon { display: inline-block; color: currentColor; width: var(--icon-size-16); height: var(--icon-size-16); flex: 0 0 auto; object-fit: contain; vertical-align: middle; }
+.mono, code, kbd, samp, pre { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body>
+  <div class="editor-shell">
+
+    <!-- ========== TOOLBAR ========== -->
+    <header class="toolbar">
+      <!-- Brand -->
+      <div class="brand-mark">DW</div>
+      <span class="brand-name">DiagramWeave</span>
+      <div class="tool-divider"></div>
+
+      <!-- Breadcrumbs -->
+      <nav class="breadcrumb">
+        <span class="breadcrumb-item"><i data-lucide="folder" style="width:12px;height:12px;"></i> 项目</span>
+        <i data-lucide="chevron-right" style="width:10px;height:10px;color:var(--text-tertiary);"></i>
+        <span class="breadcrumb-item"><i data-lucide="folder-open" style="width:12px;height:12px;"></i> 用户管理</span>
+        <i data-lucide="chevron-right" style="width:10px;height:10px;color:var(--text-tertiary);"></i>
+        <span class="breadcrumb-item active">用户注册流程</span>
+      </nav>
+
+      <div class="toolbar-spacer"></div>
+
+      <!-- Command Palette Hint -->
+      <div class="command-palette-hint">
+        <i data-lucide="search" style="width:14px;height:14px;color:var(--icon-tertiary);"></i>
+        <span>搜索命令...</span>
+        <kbd>Ctrl+K</kbd>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <!-- File group -->
+      <div class="tool-group">
+        <button class="tool-btn" title="新建"><i data-lucide="file-plus"></i></button>
+        <button class="tool-btn" title="保存"><i data-lucide="save"></i></button>
+        <button class="tool-btn" title="导入"><i data-lucide="upload"></i></button>
+        <button class="tool-btn" title="导出"><i data-lucide="download"></i></button>
+      </div>
+      <div class="tool-divider"></div>
+
+      <!-- Edit group -->
+      <div class="tool-group">
+        <button class="tool-btn active" title="选择"><i data-lucide="mouse-pointer-2"></i></button>
+        <button class="tool-btn" title="连线"><i data-lucide="spline"></i></button>
+        <button class="tool-btn" title="平移"><i data-lucide="hand"></i></button>
+      </div>
+      <div class="tool-divider"></div>
+
+      <!-- Undo/Redo -->
+      <div class="tool-group">
+        <button class="tool-btn" title="撤销"><i data-lucide="undo-2"></i></button>
+        <button class="tool-btn" title="重做"><i data-lucide="redo-2"></i></button>
+      </div>
+      <div class="tool-divider"></div>
+
+      <!-- Layout group -->
+      <div class="tool-group">
+        <button class="tool-btn" title="自动布局"><i data-lucide="layout-grid"></i></button>
+        <button class="tool-btn" title="路由模式"><i data-lucide="git-branch"></i></button>
+      </div>
+      <div class="tool-divider"></div>
+
+      <!-- Danger group -->
+      <div class="tool-group">
+        <button class="tool-btn danger" title="删除"><i data-lucide="trash-2"></i></button>
+      </div>
+      <div class="tool-divider"></div>
+
+      <!-- Right end actions -->
+      <div class="tool-group">
+        <button class="tool-btn" title="分享"><i data-lucide="share-2"></i></button>
+        <button class="tool-btn theme-toggle" title="切换主题" onclick="document.documentElement.classList.toggle('dark')">
+          <img class="theme-toggle__sun" src="../assets/icons/dl_builtin_trae_work/Sun.svg" alt="浅色" style="width:16px;height:16px;">
+          <img class="theme-toggle__moon" src="../assets/icons/dl_builtin_trae_work/Moon.svg" alt="深色" style="width:16px;height:16px;">
+        </button>
+        <button class="tool-btn" title="设置"><i data-lucide="settings"></i></button>
+        <button class="tool-btn tool-btn-brand" title="演示"><i data-lucide="play"></i></button>
+        <div class="avatar-pill">
+          <div class="avatar-dot">李</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ========== LEFT SIDEBAR ========== -->
+    <aside class="sidebar">
+      <!-- Search -->
+      <div class="sidebar-search">
+        <div class="search-input-wrap ds-input">
+          <span class="ds-input__icon"><i data-lucide="search" style="width:14px;height:14px;"></i></span>
+          <input type="text" placeholder="搜索图形..." readonly>
+        </div>
+      </div>
+
+      <!-- Template card -->
+      <div class="template-card">
+        <div class="tc-icon"><i data-lucide="layout-template" style="width:16px;height:16px;"></i></div>
+        <div>
+          <div class="tc-text">流程模板</div>
+          <div class="tc-desc">浏览预设模板快速开始</div>
+        </div>
+        <i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--icon-tertiary);margin-left:auto;"></i>
+      </div>
+
+      <!-- Basic shapes section card -->
+      <div class="section-card">
+        <div class="section-header">
+          <i data-lucide="shapes" style="width:13px;height:13px;"></i>
+          <span>基本图形</span>
+        </div>
+        <div class="shape-grid">
+          <div class="shape-card active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+            <span class="sc-label">矩形</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="10" rx="5"/></svg>
+            <span class="sc-label">圆角矩形</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>
+            <span class="sc-label">椭圆</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12,2 22,12 12,22 2,12"/></svg>
+            <span class="sc-label">菱形</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12,2 22,9 19,21 5,21 2,9"/></svg>
+            <span class="sc-label">五边形</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="12,2 20,8 20,16 12,22 4,16 4,8"/></svg>
+            <span class="sc-label">六边形</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="4" x2="12" y2="20"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+            <span class="sc-label">星形</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l4 8 8 1-6 5 2 9-8-4-8 4 2-9-6-5 8-1z"/></svg>
+            <span class="sc-label">五角星</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Extended shapes section card -->
+      <div class="section-card">
+        <div class="section-header">
+          <i data-lucide="puzzle" style="width:13px;height:13px;"></i>
+          <span>扩展图形</span>
+        </div>
+        <div class="shape-grid">
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="8" width="16" height="10" rx="0"/><line x1="4" y1="8" x2="4" y2="4"/><line x1="20" y1="8" x2="20" y2="4"/></svg>
+            <span class="sc-label">数据库</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="10" rx="2"/><line x1="8" y1="7" x2="8" y2="17"/><line x1="16" y1="7" x2="16" y2="17"/></svg>
+            <span class="sc-label">文档</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="12" y1="5" x2="12" y2="19"/></svg>
+            <span class="sc-label">卡片</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/></svg>
+            <span class="sc-label">泳道</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="4" width="12" height="16" rx="0"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            <span class="sc-label">容器</span>
+          </div>
+          <div class="shape-card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/><circle cx="20" cy="18" r="2"/></svg>
+            <span class="sc-label">列表</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Layers section card -->
+      <div class="section-card">
+        <div class="section-header">
+          <i data-lucide="layers" style="width:13px;height:13px;"></i>
+          <span>图层</span>
+        </div>
+        <div class="layer-list">
+          <div class="layer-item active">
+            <i data-lucide="square" style="width:14px;height:14px;color:var(--viz-series-brand);"></i>
+            <span class="layer-name">主流程</span>
+            <span class="layer-vis"><i data-lucide="eye" style="width:13px;height:13px;"></i></span>
+          </div>
+          <div class="layer-item">
+            <i data-lucide="square" style="width:14px;height:14px;color:var(--status-primary-default);"></i>
+            <span class="layer-name">备注层</span>
+            <span class="layer-vis"><i data-lucide="eye" style="width:13px;height:13px;"></i></span>
+          </div>
+          <div class="layer-item">
+            <i data-lucide="square" style="width:14px;height:14px;color:var(--status-success-default);"></i>
+            <span class="layer-name">辅助线</span>
+            <span class="layer-vis"><i data-lucide="eye-off" style="width:13px;height:13px;"></i></span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ========== CANVAS AREA ========== -->
+    <main class="canvas-area">
+
+      <!-- SVG defs for gradient connections — using viz-series-brand -->
+      <svg class="connections-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="gradientFlow" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#6A6FFF" stop-opacity="0.7"/>
+            <stop offset="100%" stop-color="#4B3FE3" stop-opacity="0.7"/>
+          </linearGradient>
+          <linearGradient id="gradientFlow2" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#4B3FE3" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="#15A877" stop-opacity="0.6"/>
+          </linearGradient>
+          <linearGradient id="gradientFlow3" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FEA900" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#E8463A" stop-opacity="0.5"/>
+          </linearGradient>
+          <linearGradient id="gradientFlow4" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#15A877" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#2F74FF" stop-opacity="0.6"/>
+          </linearGradient>
+          <linearGradient id="gradientFlow5" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#E8463A" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#2F74FF" stop-opacity="0.6"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Connection 1: 用户请求 -> 身份验证 -->
+        <path d="M 420 93 C 420 130, 420 140, 420 177"
+              fill="none" stroke="url(#gradientFlow)" stroke-width="1.5"/>
+        <circle r="2.5" fill="#6A6FFF" opacity="0.8">
+          <animateMotion dur="2s" repeatCount="indefinite" path="M 420 93 C 420 130, 420 140, 420 177"/>
+        </circle>
+
+        <!-- Connection 2: 身份验证 -> 权限检查 -->
+        <path d="M 420 233 C 420 270, 420 290, 420 317"
+              fill="none" stroke="url(#gradientFlow)" stroke-width="1.5"/>
+        <circle r="2.5" fill="#6A6FFF" opacity="0.8">
+          <animateMotion dur="2s" repeatCount="indefinite" begin="0.5s" path="M 420 233 C 420 270, 420 290, 420 317"/>
+        </circle>
+
+        <!-- Connection 3: 权限检查 -> 允许访问 (左分支 "是") -->
+        <path d="M 383 355 C 340 375, 280 380, 250 417"
+              fill="none" stroke="url(#gradientFlow2)" stroke-width="1.5"/>
+        <circle r="2.5" fill="#15A877" opacity="0.75">
+          <animateMotion dur="2.5s" repeatCount="indefinite" begin="1s" path="M 383 355 C 340 375, 280 380, 250 417"/>
+        </circle>
+
+        <!-- Connection 4: 权限检查 -> 拒绝访问 (右分支 "否") -->
+        <path d="M 457 355 C 500 375, 560 380, 590 417"
+              fill="none" stroke="url(#gradientFlow3)" stroke-width="1.5"/>
+        <circle r="2.5" fill="#E8463A" opacity="0.75">
+          <animateMotion dur="2.5s" repeatCount="indefinite" begin="1.2s" path="M 457 355 C 500 375, 560 380, 590 417"/>
+        </circle>
+
+        <!-- Connection 5: 允许访问 -> 返回响应 -->
+        <path d="M 220 473 C 220 520, 300 540, 370 567"
+              fill="none" stroke="url(#gradientFlow4)" stroke-width="1.5"/>
+        <circle r="2.5" fill="#2F74FF" opacity="0.7">
+          <animateMotion dur="2s" repeatCount="indefinite" begin="1.5s" path="M 220 473 C 220 520, 300 540, 370 567"/>
+        </circle>
+
+        <!-- Connection 5b: 拒绝访问 -> 返回响应 -->
+        <path d="M 620 473 C 620 520, 540 540, 470 567"
+              fill="none" stroke="url(#gradientFlow5)" stroke-width="1.5"/>
+        <circle r="2.5" fill="#2F74FF" opacity="0.7">
+          <animateMotion dur="2s" repeatCount="indefinite" begin="1.7s" path="M 620 473 C 620 520, 540 540, 470 567"/>
+        </circle>
+
+        <!-- Branch labels with white background pills -->
+        <rect x="328" y="376" width="20" height="16" rx="4" fill="white" stroke="#15A877" stroke-width="0.5" opacity="0.9"/>
+        <text x="338" y="388" fill="#15A877" font-size="10" font-weight="600" font-family="var(--font-family-default), sans-serif" text-anchor="middle">是</text>
+
+        <rect x="462" y="376" width="20" height="16" rx="4" fill="white" stroke="#E8463A" stroke-width="0.5" opacity="0.9"/>
+        <text x="472" y="388" fill="#E8463A" font-size="10" font-weight="600" font-family="var(--font-family-default), sans-serif" text-anchor="middle">否</text>
+      </svg>
+
+      <!-- Node 1: 用户请求 (Start, rounded-rect, green) -->
+      <div class="node node-start" style="left:340px; top:45px; width:160px; height:48px;">
+        <div class="node-icon">
+          <i data-lucide="play" style="width:13px;height:13px;"></i>
+        </div>
+        <span>用户请求</span>
+      </div>
+
+      <!-- Node 2: 身份验证 (Process, rectangle, brand) — SELECTED -->
+      <div class="node node-process node-selected" style="left:330px; top:177px; width:180px; height:56px;">
+        <div class="node-icon">
+          <i data-lucide="shield-check" style="width:14px;height:14px;"></i>
+        </div>
+        <span>身份验证</span>
+        <div class="node-selected-ring"></div>
+      </div>
+
+      <!-- Node 3: 权限检查 (Decision, diamond shape, amber) -->
+      <div class="node node-decision" style="left:370px; top:317px; width:100px; height:76px;">
+        <span>权限检查</span>
+      </div>
+
+      <!-- Node 4: 允许访问 (Process, rectangle, green) — left branch -->
+      <div class="node node-process-green" style="left:140px; top:417px; width:160px; height:56px;">
+        <div class="node-icon">
+          <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
+        </div>
+        <span>允许访问</span>
+      </div>
+
+      <!-- Node 5: 拒绝访问 (Process, rectangle, red) — right branch -->
+      <div class="node node-process-red" style="left:540px; top:417px; width:160px; height:56px;">
+        <div class="node-icon">
+          <i data-lucide="x-circle" style="width:14px;height:14px;"></i>
+        </div>
+        <span>拒绝访问</span>
+      </div>
+
+      <!-- Node 6: 返回响应 (End, rounded-rect, blue) -->
+      <div class="node node-end" style="left:340px; top:567px; width:160px; height:48px;">
+        <div class="node-icon">
+          <i data-lucide="square" style="width:12px;height:12px;"></i>
+        </div>
+        <span>返回响应</span>
+      </div>
+
+      <!-- Context Menu — ds-menu component -->
+      <div class="ds-menu context-menu" style="position:absolute; left:520px; top:182px;">
+        <div class="ds-menu__item"><i data-lucide="copy" style="width:14px;height:14px;color:var(--icon-secondary);"></i><span style="flex:1;">复制</span><span class="ds-menu__shortcut">Ctrl+C</span></div>
+        <div class="ds-menu__item"><i data-lucide="clipboard" style="width:14px;height:14px;color:var(--icon-secondary);"></i><span style="flex:1;">粘贴</span><span class="ds-menu__shortcut">Ctrl+V</span></div>
+        <div class="ds-menu__item"><i data-lucide="clipboard-paste" style="width:14px;height:14px;color:var(--icon-secondary);"></i><span style="flex:1;">复制样式</span><span class="ds-menu__shortcut">Ctrl+Shift+C</span></div>
+        <div class="ds-menu__divider"></div>
+        <div class="ds-menu__item"><i data-lucide="palette" style="width:14px;height:14px;color:var(--icon-secondary);"></i><span style="flex:1;">编辑样式</span></div>
+        <div class="ds-menu__item"><i data-lucide="lock" style="width:14px;height:14px;color:var(--icon-secondary);"></i><span style="flex:1;">锁定位置</span></div>
+        <div class="ds-menu__item"><i data-lucide="link" style="width:14px;height:14px;color:var(--icon-secondary);"></i><span style="flex:1;">添加连线</span></div>
+        <div class="ds-menu__divider"></div>
+        <div class="ds-menu__item ds-menu__item--danger"><i data-lucide="trash-2" style="width:14px;height:14px;"></i><span style="flex:1;">删除</span><span class="ds-menu__shortcut">Del</span></div>
+      </div>
+
+      <!-- Floating minimap -->
+      <div class="minimap">
+        <div class="minimap-viewport"></div>
+        <div class="minimap-dot" style="background:var(--status-success-default); top:18px; left:40px;"></div>
+        <div class="minimap-dot" style="background:var(--viz-series-brand); top:30px; left:38px;"></div>
+        <div class="minimap-dot" style="background:var(--status-alert-default); top:42px; left:40px;"></div>
+        <div class="minimap-dot" style="background:var(--status-success-default); top:56px; left:22px;"></div>
+        <div class="minimap-dot" style="background:var(--status-error-default); top:56px; left:58px;"></div>
+        <div class="minimap-dot" style="background:var(--status-primary-default); top:72px; left:40px;"></div>
+        <!-- Mini connections -->
+        <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;">
+          <line x1="40" y1="22" x2="40" y2="28" stroke="rgba(75,63,227,0.3)" stroke-width="0.8"/>
+          <line x1="40" y1="34" x2="40" y2="40" stroke="rgba(75,63,227,0.3)" stroke-width="0.8"/>
+          <line x1="38" y1="46" x2="24" y2="54" stroke="rgba(21,168,119,0.3)" stroke-width="0.8"/>
+          <line x1="42" y1="46" x2="56" y2="54" stroke="rgba(232,70,58,0.3)" stroke-width="0.8"/>
+          <line x1="24" y1="60" x2="36" y2="70" stroke="rgba(47,116,255,0.3)" stroke-width="0.8"/>
+          <line x1="56" y1="60" x2="44" y2="70" stroke="rgba(47,116,255,0.3)" stroke-width="0.8"/>
+        </svg>
+      </div>
+
+      <!-- Floating zoom pill -->
+      <div class="canvas-zoom-pill">
+        <button><i data-lucide="minus" style="width:14px;height:14px;"></i></button>
+        <span class="czp-value">100%</span>
+        <div class="czp-divider"></div>
+        <button><i data-lucide="maximize-2" style="width:14px;height:14px;"></i></button>
+        <button><i data-lucide="plus" style="width:14px;height:14px;"></i></button>
+      </div>
+    </main>
+
+    <!-- ========== PROPERTIES PANEL ========== -->
+    <aside class="props-panel">
+      <div class="props-header">
+        <i data-lucide="sliders-horizontal" style="width:14px;height:14px;color:var(--viz-series-brand);"></i>
+        <span>属性面板</span>
+        <i data-lucide="x" style="width:14px;height:14px;color:var(--icon-tertiary);cursor:pointer;"></i>
+      </div>
+
+      <!-- Selected node info -->
+      <div class="props-section">
+        <div class="props-section-title">选中节点</div>
+        <div class="props-node-info">
+          <div class="props-node-icon-wrap">
+            <i data-lucide="shield-check" style="width:16px;height:16px;color:var(--viz-series-brand);"></i>
+          </div>
+          <div class="props-node-meta">
+            <div class="props-node-name">身份验证</div>
+            <div class="props-node-type">矩形节点 · 处理</div>
+          </div>
+          <div class="props-node-id">ID: n-042</div>
+        </div>
+
+        <div class="props-field">
+          <div class="props-field-label">标签</div>
+          <div class="ds-input"><input type="text" value="身份验证" readonly></div>
+        </div>
+        <div class="props-field-row">
+          <div class="props-field">
+            <div class="props-field-label">X</div>
+            <div class="ds-input"><input type="text" value="330" readonly></div>
+          </div>
+          <div class="props-field">
+            <div class="props-field-label">Y</div>
+            <div class="ds-input"><input type="text" value="177" readonly></div>
+          </div>
+        </div>
+        <div class="props-field-row">
+          <div class="props-field">
+            <div class="props-field-label">W</div>
+            <div class="ds-input"><input type="text" value="180" readonly></div>
+          </div>
+          <div class="props-field">
+            <div class="props-field-label">H</div>
+            <div class="ds-input"><input type="text" value="56" readonly></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Style section -->
+      <div class="props-section">
+        <div class="props-section-title">样式</div>
+
+        <div class="props-field">
+          <div class="props-field-label">填充颜色</div>
+          <div class="color-swatches">
+            <div class="swatch active" style="background:rgba(75,63,227,0.12);"></div>
+            <div class="swatch" style="background:rgba(47,116,255,0.12);"></div>
+            <div class="swatch" style="background:rgba(21,168,119,0.12);"></div>
+            <div class="swatch" style="background:rgba(254,169,0,0.12);"></div>
+            <div class="swatch" style="background:rgba(232,70,58,0.12);"></div>
+            <div class="swatch" style="background:var(--bg-base-default);border:1px solid var(--border-neutral-l1);"></div>
+          </div>
+        </div>
+
+        <div class="props-field">
+          <div class="props-field-label">边框颜色</div>
+          <div class="color-swatches">
+            <div class="swatch active" style="background:#4B3FE3;"></div>
+            <div class="swatch" style="background:#2F74FF;"></div>
+            <div class="swatch" style="background:#15A877;"></div>
+            <div class="swatch" style="background:#FEA900;"></div>
+            <div class="swatch" style="background:#E8463A;"></div>
+            <div class="swatch" style="background:var(--bg-base-tertiary);"></div>
+          </div>
+        </div>
+
+        <div class="props-field">
+          <div class="props-field-label">边框宽度</div>
+          <div class="slider-row">
+            <div class="slider-track">
+              <div class="slider-fill" style="width:33%;"></div>
+              <div class="slider-thumb" style="left:33%;"></div>
+            </div>
+            <span class="slider-value">1.5</span>
+          </div>
+        </div>
+
+        <div class="props-field">
+          <div class="props-field-label">不透明度</div>
+          <div class="slider-row">
+            <div class="slider-track">
+              <div class="slider-fill" style="width:100%;background:var(--status-primary-default);"></div>
+              <div class="slider-thumb" style="left:100%;background:var(--status-primary-default);"></div>
+            </div>
+            <span class="slider-value">100%</span>
+          </div>
+        </div>
+
+        <div class="props-field">
+          <div class="props-field-label">圆角</div>
+          <div class="slider-row">
+            <div class="slider-track">
+              <div class="slider-fill" style="width:40%;background:var(--status-success-default);"></div>
+              <div class="slider-thumb" style="left:40%;background:var(--status-success-default);"></div>
+            </div>
+            <span class="slider-value">6px</span>
+          </div>
+        </div>
+
+        <!-- Toggle switches — ds-switch component -->
+        <div class="props-field">
+          <div class="props-toggle-row">
+            <span class="props-field-label" style="margin-bottom:0;">显示阴影</span>
+            <label class="ds-switch">
+              <input type="checkbox" checked>
+              <span class="ds-switch__thumb"></span>
+            </label>
+          </div>
+        </div>
+        <div class="props-field">
+          <div class="props-toggle-row">
+            <span class="props-field-label" style="margin-bottom:0;">锁定宽高比</span>
+            <label class="ds-switch">
+              <input type="checkbox">
+              <span class="ds-switch__thumb"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Connections section -->
+      <div class="props-section">
+        <div class="props-section-title">连线</div>
+        <div class="connection-list">
+          <div class="connection-item">
+            <div class="conn-from">用户请求</div>
+            <i data-lucide="arrow-down" style="width:12px;height:12px;color:var(--icon-tertiary);"></i>
+            <div class="conn-to">身份验证</div>
+          </div>
+          <div class="connection-item">
+            <div class="conn-from">身份验证</div>
+            <i data-lucide="arrow-down" style="width:12px;height:12px;color:var(--icon-tertiary);"></i>
+            <div class="conn-to">权限检查</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="props-section">
+        <div class="props-section-title">快捷操作</div>
+        <button class="quick-action-btn ds-btn--ghost" style="width:100%;height:auto;padding:var(--spacer-8) 0;border:1px solid var(--border-neutral-l1);border-radius:var(--radius-8);font-size:var(--body-md-font-size);color:var(--text-secondary);margin-bottom:var(--spacer-4);">
+          <i data-lucide="copy" style="width:14px;height:14px;"></i>
+          复制节点
+        </button>
+        <button class="quick-action-btn ds-btn--ghost" style="width:100%;height:auto;padding:var(--spacer-8) 0;border:1px solid var(--border-neutral-l1);border-radius:var(--radius-8);font-size:var(--body-md-font-size);color:var(--text-secondary);margin-bottom:var(--spacer-4);">
+          <i data-lucide="lock" style="width:14px;height:14px;"></i>
+          锁定位置
+        </button>
+        <button class="quick-action-btn ds-btn--ghost" style="width:100%;height:auto;padding:var(--spacer-8) 0;border:1px solid var(--border-neutral-l1);border-radius:var(--radius-8);font-size:var(--body-md-font-size);color:var(--text-secondary);margin-bottom:var(--spacer-4);">
+          <i data-lucide="palette" style="width:14px;height:14px;"></i>
+          复制样式
+        </button>
+        <button class="quick-action-btn ds-btn--ghost" style="width:100%;height:auto;padding:var(--spacer-8) 0;border:1px solid var(--status-error-surface-l2);border-radius:var(--radius-8);font-size:var(--body-md-font-size);color:var(--status-error-default);">
+          <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+          删除节点
+        </button>
+      </div>
+    </aside>
+
+    <!-- ========== STATUS BAR ========== -->
+    <footer class="status-bar">
+      <div class="status-left">
+        <span class="status-item"><i data-lucide="grid-3x3" style="width:12px;height:12px;"></i> 网格</span>
+        <span class="status-item active"><i data-lucide="magnet" style="width:12px;height:12px;"></i> 吸附</span>
+        <div class="status-divider"></div>
+        <span class="status-item"><i data-lucide="mouse-pointer-2" style="width:12px;height:12px;"></i> 选择工具</span>
+      </div>
+      <div class="status-center">
+        <span>6 个节点 · 5 条连线</span>
+      </div>
+      <div class="status-right">
+        <span class="status-item">100%</span>
+        <div class="status-divider"></div>
+        <span class="status-item">中文</span>
+        <div class="status-divider"></div>
+        <span class="status-item"><i data-lucide="keyboard" style="width:12px;height:12px;"></i> 快捷键</span>
+        <div class="status-divider"></div>
+        <span class="status-item status-sync">
+          <i data-lucide="cloud" style="width:12px;height:12px;"></i>
+          已同步
+        </span>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Initialize Lucide icons -->
+  <script>
+    lucide.createIcons();
+  </script>
+
+  <style>
+    /* ===== Global Reset ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-base-secondary);
+      color: var(--text-default);
+      font-family: var(--font-family-default);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== Editor Shell (CSS Grid) ===== */
+    .editor-shell {
+      display: grid;
+      grid-template-rows: 52px 1fr 28px;
+      grid-template-columns: 280px 1fr 300px;
+      grid-template-areas:
+        "toolbar toolbar toolbar"
+        "sidebar canvas  props"
+        "status  status  status";
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ========================================
+       TOOLBAR — TRAE Work Light Surface
+       ======================================== */
+    .toolbar {
+      grid-area: toolbar;
+      background: var(--bg-base-default);
+      border-bottom: 1px solid var(--border-neutral-l1);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--spacer-16);
+      gap: var(--spacer-6);
+      z-index: 30;
+    }
+
+    .brand-mark {
+      width: 30px; height: 30px;
+      border-radius: var(--radius-8);
+      background: var(--bg-invert);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: var(--font-weight-strong); font-size: var(--body-xs-font-size); color: var(--text-white);
+      flex-shrink: 0;
+      margin-right: var(--spacer-6);
+    }
+    .brand-name {
+      font-weight: var(--font-weight-strong); font-size: 14px; color: var(--text-default);
+      margin-right: var(--spacer-12); white-space: nowrap;
+    }
+
+    /* Breadcrumbs */
+    .breadcrumb {
+      display: flex; align-items: center; gap: var(--spacer-4);
+      font-size: var(--body-md-font-size); color: var(--text-tertiary);
+    }
+    .breadcrumb-item {
+      display: flex; align-items: center; gap: var(--spacer-4);
+      color: var(--text-tertiary); white-space: nowrap;
+    }
+    .breadcrumb-item:hover { color: var(--text-secondary); }
+    .breadcrumb-item.active { color: var(--text-default); font-weight: var(--font-weight-medium); }
+    .breadcrumb i { display: inline-flex; }
+
+    .tool-divider {
+      width: 1px; height: 24px;
+      background: var(--border-neutral-l1);
+      margin: 0 var(--spacer-4);
+      flex-shrink: 0;
+    }
+
+    .tool-group { display: flex; align-items: center; gap: 2px; }
+
+    .tool-btn {
+      width: 32px; height: 32px;
+      border-radius: var(--radius-8);
+      border: none; background: transparent;
+      color: var(--icon-secondary);
+      display: flex; align-items: center; justify-content: center;
+      cursor: default;
+      position: relative;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .tool-btn:hover {
+      background: var(--bg-overlay-l2);
+      color: var(--icon-default);
+    }
+    .tool-btn.active {
+      background: var(--bg-overlay-l3);
+      color: var(--text-default);
+    }
+    .tool-btn.danger:hover {
+      background: var(--status-error-surface-l1);
+      color: var(--status-error-default);
+    }
+    .tool-btn svg { width: var(--icon-size-16); height: var(--icon-size-16); }
+
+    /* Brand-scarce: only for single primary action — play/present button */
+    .tool-btn-brand {
+      color: var(--text-brand);
+    }
+    .tool-btn-brand:hover {
+      background: var(--bg-brand-popup);
+      color: var(--text-brand-hover);
+    }
+
+    .toolbar-spacer { flex: 1; }
+
+    /* Command Palette Hint */
+    .command-palette-hint {
+      display: flex; align-items: center; gap: var(--spacer-8);
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-8);
+      padding: var(--spacer-6) var(--spacer-12);
+      font-size: var(--body-md-font-size); font-weight: var(--font-weight-default);
+      color: var(--text-tertiary);
+      white-space: nowrap;
+      max-width: 200px;
+    }
+    .command-palette-hint i { flex-shrink: 0; }
+    .command-palette-hint span { overflow: hidden; text-overflow: ellipsis; }
+    .command-palette-hint kbd {
+      font-family: var(--font-family-mono);
+      font-size: var(--body-xs-font-size); font-weight: var(--font-weight-medium);
+      background: var(--bg-base-default);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      padding: 1px 5px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+    }
+
+    /* Avatar pill */
+    .avatar-pill {
+      width: 30px; height: 30px;
+      border-radius: var(--radius-full);
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+      margin-left: var(--spacer-4);
+    }
+    .avatar-dot {
+      width: 100%; height: 100%;
+      border-radius: var(--radius-full);
+      background: var(--bg-invert);
+      display: flex; align-items: center; justify-content: center;
+      font-size: var(--body-xs-font-size); font-weight: var(--font-weight-strong); color: var(--text-white);
+    }
+
+    /* ========================================
+       LEFT SIDEBAR — TRAE Work Surface
+       ======================================== */
+    .sidebar {
+      grid-area: sidebar;
+      background: var(--bg-base-default);
+      border-right: 1px solid var(--border-neutral-l1);
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+      z-index: 10;
+    }
+
+    .sidebar-search { padding: var(--spacer-10) var(--spacer-12) var(--spacer-8); }
+
+    .template-card {
+      margin: 0 var(--spacer-12) var(--spacer-10);
+      padding: var(--spacer-10) var(--spacer-12);
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-8);
+      display: flex; align-items: center; gap: var(--spacer-10);
+      cursor: default;
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+    .template-card:hover {
+      border-color: var(--border-neutral-l2);
+      background: var(--bg-overlay-l1);
+    }
+    .template-card .tc-icon {
+      width: 36px; height: 36px;
+      border-radius: var(--radius-8);
+      background: var(--bg-base-default);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-secondary);
+    }
+    .template-card .tc-text {
+      font-size: var(--body-md-font-size); font-weight: var(--font-weight-medium); color: var(--text-default);
+    }
+    .template-card .tc-desc {
+      font-size: var(--body-xs-font-size); color: var(--text-tertiary); margin-top: 1px;
+    }
+
+    /* Section cards */
+    .section-card {
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-8);
+      padding: 0 var(--spacer-12) var(--spacer-12);
+      margin: 0 var(--spacer-12) var(--spacer-10);
+    }
+
+    .section-header {
+      display: flex; align-items: center; gap: var(--spacer-6);
+      padding: var(--spacer-10) 0 var(--spacer-6);
+      font-size: var(--body-xs-font-size); font-weight: var(--font-weight-strong);
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .shape-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacer-4);
+    }
+
+    .shape-card {
+      height: 52px;
+      border-radius: var(--radius-4);
+      background: var(--bg-base-default);
+      border: 1px solid transparent;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 3px;
+      cursor: default;
+      transition: background 120ms ease, border-color 120ms ease;
+      color: var(--icon-tertiary);
+    }
+    .shape-card:hover {
+      background: var(--bg-overlay-l1);
+      border-color: var(--border-neutral-l1);
+      color: var(--icon-default);
+    }
+    .shape-card.active {
+      border-color: var(--border-neutral-l2);
+      background: var(--bg-overlay-l2);
+      color: var(--viz-series-brand);
+    }
+    .shape-card svg { width: 18px; height: 18px; }
+    .shape-card .sc-label { font-size: var(--body-xs-font-size); color: var(--text-tertiary); }
+
+    .layer-list { display: flex; flex-direction: column; gap: 2px; }
+    .layer-item {
+      display: flex; align-items: center; gap: var(--spacer-8);
+      padding: var(--spacer-6) var(--spacer-8);
+      border-radius: var(--radius-4);
+      font-size: var(--body-md-font-size); color: var(--text-secondary);
+      cursor: default;
+      transition: background 120ms ease;
+    }
+    .layer-item:hover { background: var(--bg-overlay-l1); }
+    .layer-item.active { background: var(--bg-overlay-l2); color: var(--text-default); }
+    .layer-item svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .layer-item .layer-name { flex: 1; }
+    .layer-item .layer-vis svg { width: 13px; height: 13px; }
+
+    /* ========================================
+       CANVAS AREA — Dot Grid on default bg
+       ======================================== */
+    .canvas-area {
+      grid-area: canvas;
+      position: relative;
+      overflow: hidden;
+      background-color: var(--bg-base-default);
+      background-image: radial-gradient(circle, var(--bg-base-tertiary) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    /* ===== Canvas Nodes ===== */
+    .node {
+      position: absolute;
+      display: flex; align-items: center; justify-content: center; gap: var(--spacer-6);
+      font-size: var(--body-md-font-size); font-weight: var(--font-weight-medium);
+      border-radius: var(--radius-8);
+      border: 1.5px solid;
+      cursor: default;
+      white-space: nowrap;
+      z-index: 5;
+      padding: 0 var(--spacer-16);
+      transition: box-shadow 200ms cubic-bezier(.3,0,0,1), transform 120ms ease;
+    }
+
+    .node-icon {
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+
+    /* Start node — success surface */
+    .node-start {
+      background: var(--status-success-surface-l1);
+      border-color: rgba(21,168,119,0.4);
+      color: #1E8B56;
+      border-radius: var(--radius-full);
+    }
+    .node-start:hover {
+      box-shadow: 0 0 0 2px var(--status-success-surface-l1);
+    }
+
+    /* Process node — brand surface */
+    .node-process {
+      background: var(--bg-brand-popup);
+      border-color: rgba(75,63,227,0.35);
+      color: var(--text-brand);
+    }
+    .node-process:hover {
+      box-shadow: 0 0 0 2px var(--bg-brand-popup);
+    }
+
+    /* Decision node — amber */
+    .node-decision {
+      background: var(--status-alert-surface-l1);
+      border-color: rgba(254,169,0,0.4);
+      color: #E59100;
+      border-radius: var(--radius-4);
+      transform: rotate(45deg);
+      padding: 0;
+    }
+    .node-decision span { transform: rotate(-45deg); font-size: var(--body-md-font-size); }
+    .node-decision:hover {
+      box-shadow: 0 0 0 2px var(--status-alert-surface-l1);
+    }
+
+    /* Process green */
+    .node-process-green {
+      background: var(--status-success-surface-l1);
+      border-color: rgba(21,168,119,0.35);
+      color: #1E8B56;
+    }
+    .node-process-green:hover {
+      box-shadow: 0 0 0 2px var(--status-success-surface-l1);
+    }
+
+    /* Process red */
+    .node-process-red {
+      background: var(--status-error-surface-l1);
+      border-color: rgba(232,70,58,0.35);
+      color: #C9382F;
+    }
+    .node-process-red:hover {
+      box-shadow: 0 0 0 2px var(--status-error-surface-l1);
+    }
+
+    /* End node — info surface */
+    .node-end {
+      background: var(--status-primary-surface-l1);
+      border-color: rgba(47,116,255,0.4);
+      color: #1759DD;
+      border-radius: var(--radius-full);
+    }
+    .node-end:hover {
+      box-shadow: 0 0 0 2px var(--status-primary-surface-l1);
+    }
+
+    /* Selected node — overlay-l2 ring, not brand fill */
+    .node-selected {
+      border-color: var(--text-default) !important;
+      box-shadow: 0 0 0 2px var(--bg-overlay-l3), 0 0 0 4px var(--bg-base-default) !important;
+    }
+    .node-selected-ring {
+      position: absolute;
+      inset: -4px;
+      border-radius: inherit;
+      border: 1px dashed var(--text-disabled);
+      pointer-events: none;
+    }
+
+    /* Connection lines SVG */
+    .connections-svg {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* Context menu overrides for positioning */
+    .context-menu {
+      z-index: 20;
+      min-width: 200px;
+    }
+
+    /* ========================================
+       MINIMAP
+       ======================================== */
+    .minimap {
+      position: absolute;
+      bottom: var(--spacer-16); right: var(--spacer-16);
+      width: 160px; height: 110px;
+      background: var(--bg-base-default);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-8);
+      z-index: 15;
+      overflow: hidden;
+    }
+    .minimap-viewport {
+      position: absolute;
+      border: 1.5px solid var(--viz-series-brand);
+      border-radius: 3px;
+      background: var(--bg-brand-popup);
+      top: 10px; left: 25px;
+      width: 100px; height: 68px;
+    }
+    .minimap-dot {
+      position: absolute;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+    }
+
+    /* Canvas Zoom Pill */
+    .canvas-zoom-pill {
+      position: absolute;
+      bottom: var(--spacer-16); left: 50%;
+      transform: translateX(-50%);
+      display: flex; align-items: center;
+      background: var(--bg-base-default);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-full);
+      padding: 3px;
+      z-index: 15;
+      gap: 2px;
+    }
+    .canvas-zoom-pill button {
+      width: 28px; height: 28px;
+      border: none; background: transparent;
+      color: var(--icon-secondary); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: default;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .canvas-zoom-pill button:hover {
+      background: var(--bg-overlay-l1);
+      color: var(--icon-default);
+    }
+    .canvas-zoom-pill .czp-value {
+      font-size: var(--body-xs-font-size); font-weight: var(--font-weight-medium);
+      color: var(--text-default);
+      padding: 0 var(--spacer-6);
+      font-family: var(--font-family-mono);
+      min-width: 36px; text-align: center;
+    }
+    .canvas-zoom-pill .czp-divider {
+      width: 1px; height: 18px; background: var(--border-neutral-l1);
+    }
+
+    /* ========================================
+       PROPERTIES PANEL — TRAE Work Surface
+       ======================================== */
+    .props-panel {
+      grid-area: props;
+      background: var(--bg-base-default);
+      border-left: 1px solid var(--border-neutral-l1);
+      overflow-y: auto;
+      z-index: 10;
+      display: flex; flex-direction: column;
+    }
+
+    .props-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--spacer-10) var(--spacer-16);
+      border-bottom: 1px solid var(--border-neutral-l1);
+      font-size: var(--body-md-font-size); font-weight: var(--font-weight-strong);
+      color: var(--text-default);
+      gap: var(--spacer-8);
+    }
+    .props-header svg { width: var(--icon-size-14); height: var(--icon-size-14); }
+
+    .props-section {
+      padding: var(--spacer-10) var(--spacer-16);
+      border-bottom: 1px solid var(--border-neutral-l1);
+    }
+    .props-section:last-child { border-bottom: none; }
+
+    .props-section-title {
+      font-size: var(--body-xs-font-size); font-weight: var(--font-weight-strong);
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: var(--spacer-8);
+    }
+
+    .props-node-info {
+      display: flex; align-items: center; gap: var(--spacer-10);
+      padding: var(--spacer-8) var(--spacer-10);
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-8);
+      margin-bottom: var(--spacer-10);
+    }
+    .props-node-icon-wrap {
+      width: 32px; height: 32px;
+      border-radius: var(--radius-8);
+      background: var(--bg-brand-popup);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .props-node-meta { flex: 1; }
+    .props-node-name {
+      font-size: var(--body-md-font-size); font-weight: var(--font-weight-strong);
+      color: var(--text-default);
+    }
+    .props-node-type {
+      font-size: var(--body-xs-font-size); color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+    .props-node-id {
+      font-size: var(--body-xs-font-size); color: var(--text-tertiary);
+      font-family: var(--font-family-mono);
+      background: var(--bg-base-secondary);
+      padding: 2px var(--spacer-6);
+      border-radius: var(--radius-4);
+      border: 1px solid var(--border-neutral-l1);
+    }
+
+    .props-field { margin-bottom: var(--spacer-8); }
+    .props-field-label {
+      font-size: var(--body-md-font-size); font-weight: var(--font-weight-medium);
+      color: var(--text-secondary);
+      margin-bottom: var(--spacer-3);
+    }
+    .props-field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacer-6);
+    }
+
+    /* Color swatches */
+    .color-swatches { display: flex; gap: var(--spacer-6); flex-wrap: wrap; }
+    .swatch {
+      width: 24px; height: 24px;
+      border-radius: var(--radius-6);
+      border: 2px solid transparent;
+      cursor: default;
+      position: relative;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+    .swatch:hover {
+      transform: scale(1.1);
+      border-color: var(--border-neutral-l2);
+    }
+    .swatch.active {
+      border-color: var(--text-default);
+      box-shadow: 0 0 0 2px var(--bg-base-default), 0 0 0 4px var(--text-default);
+    }
+
+    /* Slider inputs */
+    .slider-row { display: flex; align-items: center; gap: var(--spacer-10); }
+    .slider-track {
+      flex: 1; height: 4px;
+      background: var(--bg-overlay-l3);
+      border-radius: 2px;
+      position: relative;
+    }
+    .slider-fill {
+      height: 100%;
+      background: var(--viz-series-brand);
+      border-radius: 2px;
+    }
+    .slider-thumb {
+      width: 14px; height: 14px;
+      background: var(--bg-base-default);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--border-neutral-l3);
+      box-shadow: none;
+      transition: box-shadow 120ms ease;
+    }
+    .slider-thumb:hover {
+      box-shadow: 0 0 0 3px var(--bg-brand-popup);
+    }
+    .slider-value {
+      font-size: var(--body-md-font-size); font-family: var(--font-family-mono);
+      color: var(--text-secondary); min-width: 32px; text-align: right;
+    }
+
+    /* Toggle rows */
+    .props-toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    /* Connection list */
+    .connection-list { display: flex; flex-direction: column; gap: var(--spacer-4); }
+    .connection-item {
+      display: flex; align-items: center; gap: var(--spacer-6);
+      padding: var(--spacer-6) var(--spacer-8);
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      font-size: var(--body-xs-font-size);
+    }
+    .conn-from { color: var(--text-secondary); flex: 1; text-align: right; }
+    .conn-to { color: var(--text-default); flex: 1; }
+
+    /* Quick action buttons */
+    .quick-action-btn {
+      display: flex; align-items: center; justify-content: center; gap: var(--spacer-6);
+    }
+
+    /* ========================================
+       STATUS BAR — TRAE Work
+       ======================================== */
+    .status-bar {
+      grid-area: status;
+      background: var(--bg-base-default);
+      border-top: 1px solid var(--border-neutral-l1);
+      display: flex; align-items: center;
+      padding: 0 var(--spacer-16);
+      z-index: 20;
+      font-size: var(--body-xs-font-size); font-weight: var(--font-weight-default);
+    }
+    .status-left, .status-right {
+      display: flex; align-items: center; gap: var(--spacer-4);
+    }
+    .status-center {
+      flex: 1;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: var(--body-xs-font-size);
+    }
+    .status-item {
+      display: flex; align-items: center; gap: var(--spacer-4);
+      color: var(--text-tertiary);
+      padding: 2px var(--spacer-6);
+      border-radius: var(--radius-4);
+      cursor: default;
+      white-space: nowrap;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .status-item:hover {
+      background: var(--bg-overlay-l1);
+      color: var(--text-secondary);
+    }
+    .status-item.active {
+      color: var(--text-default);
+    }
+    .status-item svg { display: inline-flex; }
+    .status-divider {
+      width: 1px; height: 14px;
+      background: var(--border-neutral-l1);
+      margin: 0 2px;
+    }
+    .status-sync { color: var(--status-success-default); }
+
+    /* ===== Scrollbar ===== */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-overlay-l2);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: var(--bg-overlay-l3); }
+
+    /* ===== Lucide Icon Fix ===== */
+    [data-icon] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-mask-size: contain;
+      mask-size: contain;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      mask-position: center;
+      background-color: currentColor;
+    }
+
+    /* ===== Theme Toggle Button ===== */
+    .theme-toggle {
+      width: 28px !important;
+      height: 28px !important;
+      border-radius: var(--radius-6) !important;
+      position: relative;
+      overflow: hidden;
+    }
+    .theme-toggle__sun,
+    .theme-toggle__moon {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--icon-secondary);
+      transition: opacity .2s ease;
+    }
+    .theme-toggle__moon { opacity: 0; }
+    .dark .theme-toggle__sun { opacity: 0; }
+    .dark .theme-toggle__moon { opacity: 1; }
+
+    /* ===== Canvas Dark Mode ===== */
+    .dark .node-start,
+    .dark .node-process,
+    .dark .node-decision,
+    .dark .node-process-green,
+    .dark .node-process-red,
+    .dark .node-end {
+      background: var(--bg-base-secondary);
+      border-color: var(--border-neutral-l1);
+      color: var(--text-default);
+    }
+    .dark .node-selected {
+      border-color: var(--viz-series-brand) !important;
+      box-shadow: 0 0 0 2px rgba(106,111,255,0.36), 0 0 0 4px var(--bg-base-default) !important;
+    }
+    .dark .connections-svg path { stroke: var(--viz-series-brand); }
+    .dark .connections-svg circle { fill: var(--viz-series-brand); }
+    .dark .connections-svg rect[fill="white"] {
+      fill: var(--bg-base-secondary);
+      stroke: var(--border-neutral-l2);
+    }
+  </style>
+</body>
+</html>

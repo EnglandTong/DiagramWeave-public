@@ -633,25 +633,35 @@ text { font-family: "${fontState.family}", "Microsoft YaHei", sans-serif; }`;
 
   function serializeDocument() {
     syncPageFromState();
-    return {
+    const serialized = {
       version: 2,
+      schemaVersion: 3,
       pages: doc.pages,
       currentPageId: doc.currentPageId,
       nextPageId: doc.nextPageId,
       nextId: typeof state !== 'undefined' ? state.nextId : 1,
       connRouteMode: typeof state !== 'undefined' ? state.connRouteMode : 'bezier',
+      routingRules: typeof state !== 'undefined' ? state.routingRules : undefined,
+      reviewThreads: Array.isArray(doc.reviewThreads) ? doc.reviewThreads : [],
     };
+    return typeof DiagramWeaveContracts !== 'undefined'
+      ? DiagramWeaveContracts.migrateDocument(serialized).document
+      : serialized;
   }
 
   function loadDocument(data) {
     if (!data || !data.pages) return false;
-    const safe = typeof DiagramWeaveSanitize !== 'undefined'
-      ? DiagramWeaveSanitize.sanitizeFlowDocument(data)
+    const migrated = typeof DiagramWeaveContracts !== 'undefined'
+      ? DiagramWeaveContracts.migrateDocument(data).document
       : data;
+    const safe = typeof DiagramWeaveSanitize !== 'undefined'
+      ? DiagramWeaveSanitize.sanitizeFlowDocument(migrated)
+      : migrated;
     if (!safe || !safe.pages) return false;
     doc.pages = safe.pages;
     doc.currentPageId = safe.currentPageId || safe.pages[0].id;
     doc.nextPageId = safe.nextPageId || doc.pages.length + 1;
+    doc.reviewThreads = Array.isArray(migrated.reviewThreads) ? migrated.reviewThreads : [];
     doc.pages.forEach(p => {
       if (!p.layers) p.layers = [{ id: 0, name: dwT('layer.default', { n: 1 }), visible: true, locked: false }];
       if (!p.nextLayerId) p.nextLayerId = p.layers.length;
@@ -659,12 +669,14 @@ text { font-family: "${fontState.family}", "Microsoft YaHei", sans-serif; }`;
     syncStateFromPage();
     if (typeof state !== 'undefined' && safe.nextId) state.nextId = safe.nextId;
     if (typeof applyConnRouteModeFromData === 'function') applyConnRouteModeFromData(safe.connRouteMode);
+    if (typeof state !== 'undefined' && typeof DiagramWeaveRoutingRules !== 'undefined') state.routingRules = DiagramWeaveRoutingRules.normalizeRules(safe.routingRules);
     renderPageTabs();
     renderLayerPanel();
     return true;
   }
 
   global.DiagramWeave = {
+    ...(global.DiagramWeave || {}),
     doc,
     initDocument,
     switchPage,

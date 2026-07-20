@@ -1,0 +1,29 @@
+{
+  "id": "bpmn-approval",
+  "name": "BPMN 审批子集",
+  "nameEn": "BPMN Approval Subset",
+  "description": "使用开始事件、任务、排他网关和结束事件表达受控 BPMN 审批流程。",
+  "descriptionEn": "Controlled BPMN approval subset using start, task, exclusive gateway, and end semantics.",
+  "category": "BPMN",
+  "tags": ["BPMN", "审批", "approval", "gateway"],
+  "layout": "horizontal",
+  "preserveLayout": true,
+  "preview": {
+    "layout": "horizontal",
+    "notation": "BPMN controlled subset"
+  },
+  "nodes": [
+    { "shape": "start", "label": "提交申请", "x": 80, "y": 220, "role": "申请人" },
+    { "shape": "rectangle", "label": "审核申请", "x": 270, "y": 210, "role": "审批人" },
+    { "shape": "diamond", "label": "批准？", "x": 480, "y": 200, "role": "审批人" },
+    { "shape": "rectangle", "label": "补充材料", "x": 470, "y": 370, "role": "申请人" },
+    { "shape": "end", "label": "审批完成", "x": 700, "y": 220, "role": "系统" }
+  ],
+  "connections": [
+    { "fromIndex": 0, "fromPort": "right", "toIndex": 1, "toPort": "left" },
+    { "fromIndex": 1, "fromPort": "right", "toIndex": 2, "toPort": "left" },
+    { "fromIndex": 2, "fromPort": "right", "toIndex": 4, "toPort": "left", "label": "是" },
+    { "fromIndex": 2, "fromPort": "bottom", "toIndex": 3, "toPort": "top", "label": "否" },
+    { "fromIndex": 3, "fromPort": "left", "toIndex": 1, "toPort": "bottom", "label": "重新提交" }
+  ]
+}

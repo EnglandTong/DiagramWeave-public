@@ -3,6 +3,7 @@ const state = {
   nodes: [],
   connections: [],
   selectedNodeId: null,
+  selectedNodeIds: [],
   selectedConnectionId: null,
   tool: 'select', // 'select' | 'connect' | 'pan'
   zoom: 1,
@@ -23,6 +24,7 @@ const state = {
   panStart: { x: 0, y: 0 },
   spacePressed: false,
   connRouteMode: 'visio', // bezier | orthogonal | avoidance | straight | visio
+  routingRules: { endpointLock: true, obstaclePadding: 18, bridgeBehavior: 'jump', bridgeSize: 8, defaultLabelPlacement: 'auto' },
 };
 
 const CONN_ROUTE_LABELS = {
@@ -35,6 +37,11 @@ const CONN_ROUTE_LABELS = {
 
 /** 远程内容包形状 id → 画布渲染复用的内置 shape */
 const shapeRenderAs = {};
+let shapeLibraryRegistry = null;
+let shapeLibraryPreferences = null;
+let stencilPackStore = null;
+let versionHistoryStore = null;
+let lastHistoryFingerprint = '';
 
 const CONN_ROUTE_ALGORITHMS = {};
 
@@ -58,6 +65,7 @@ const projectSession = {
   autosaveTimer: null,
   saving: false,
   lastSavedAt: null,
+  historyId: `history_${Date.now()}_${Math.random().toString(36).slice(2)}`,
 };
 
 const NATIVE_VISIO_EXT_RE = /\.(vsdx|vsd|vsdm|vdx)$/i;
@@ -169,6 +177,21 @@ const OFFICE_STROKE_SWATCHES = [
   '#000000', '#44546A', '#4472C4', '#70AD47', '#FFC000',
   '#ED7D31', '#FF0000', '#7030A0', '#5B9BD5', '#FFFFFF',
 ];
+
+const OFFICE_COLOR_NAMES = {
+  '#FFFFFF': 'White / 白色', '#F2F2F2': 'Light gray / 浅灰', '#DAEAF6': 'Light blue / 浅蓝',
+  '#E2EFDA': 'Light green / 浅绿', '#FFF2CC': 'Light yellow / 浅黄', '#FCE4D6': 'Peach / 桃色',
+  '#F8CECC': 'Light red / 浅红', '#E4DFEC': 'Lavender / 淡紫', '#D9E1F2': 'Blue gray / 蓝灰',
+  '#1E2029': 'Charcoal / 炭黑', '#000000': 'Black / 黑色', '#44546A': 'Slate / 石板灰',
+  '#4472C4': 'Blue / 蓝色', '#70AD47': 'Green / 绿色', '#FFC000': 'Gold / 金色',
+  '#ED7D31': 'Orange / 橙色', '#FF0000': 'Red / 红色', '#7030A0': 'Purple / 紫色',
+  '#5B9BD5': 'Sky blue / 天蓝',
+};
+
+function colorAccessibleName(color) {
+  const normalized = String(color || '').toUpperCase();
+  return `${OFFICE_COLOR_NAMES[normalized] || 'Custom / 自定义'} ${normalized}`;
+}
 
 function getThemeVar(name, fallback) {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -318,6 +341,7 @@ function initFastTooltips(root) {
     tipEl.id = 'fcTooltip';
     tipEl.className = 'fc-tooltip';
     tipEl.setAttribute('role', 'tooltip');
+    tipEl.setAttribute('aria-hidden', 'true');
     document.body.appendChild(tipEl);
   }
 
@@ -329,6 +353,7 @@ function initFastTooltips(root) {
     timer = null;
     anchor = null;
     tipEl.classList.remove('visible');
+    tipEl.setAttribute('aria-hidden', 'true');
   };
 
   const show = () => {
@@ -336,6 +361,7 @@ function initFastTooltips(root) {
     const text = anchor.dataset.fcTip;
     if (!text) return;
     tipEl.textContent = text;
+    tipEl.setAttribute('aria-hidden', 'false');
     const r = anchor.getBoundingClientRect();
     const left = Math.min(window.innerWidth - 8, Math.max(8, r.left + r.width / 2));
     tipEl.style.left = `${left}px`;
@@ -350,6 +376,7 @@ function initFastTooltips(root) {
     const t = el.getAttribute('title');
     if (t) {
       el.dataset.fcTip = t;
+      if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', t);
       el.removeAttribute('title');
     }
     el.addEventListener('mouseenter', () => {
@@ -358,6 +385,8 @@ function initFastTooltips(root) {
     });
     el.addEventListener('mouseleave', hide);
     el.addEventListener('mousedown', hide);
+    el.addEventListener('focus', () => { anchor = el; show(); });
+    el.addEventListener('blur', hide);
   });
 }
 
@@ -366,10 +395,10 @@ function initColorSwatches() {
   const strokeEl = document.getElementById('propStrokeSwatches');
   if (!fillEl || !strokeEl) return;
   fillEl.innerHTML = OFFICE_FILL_SWATCHES.map(c =>
-    `<button type="button" class="color-swatch" data-color="${c}" data-kind="fill" style="background:${c}" title="填充 ${c}" onclick="setNodeFillColor('${c}')"></button>`
+    `<button type="button" class="color-swatch" data-color="${c}" data-kind="fill" style="background:${c}" title="Fill / 填充 ${colorAccessibleName(c)}" aria-label="Fill / 填充 ${colorAccessibleName(c)}" onclick="setNodeFillColor('${c}')"></button>`
   ).join('');
   strokeEl.innerHTML = OFFICE_STROKE_SWATCHES.map(c =>
-    `<button type="button" class="color-swatch color-swatch-stroke" data-color="${c}" data-kind="stroke" style="box-shadow:inset 0 0 0 3px ${c}" title="边框 ${c}" onclick="setNodeStrokeColor('${c}')"></button>`
+    `<button type="button" class="color-swatch color-swatch-stroke" data-color="${c}" data-kind="stroke" style="box-shadow:inset 0 0 0 3px ${c}" title="Stroke / 边框 ${colorAccessibleName(c)}" aria-label="Stroke / 边框 ${colorAccessibleName(c)}" onclick="setNodeStrokeColor('${c}')"></button>`
   ).join('');
   initFastTooltips(document.getElementById('propFillSwatches')?.parentElement);
   initFastTooltips(document.getElementById('propStrokeSwatches')?.parentElement);
@@ -391,24 +420,21 @@ function syncColorSwatchSelection() {
 }
 
 function setNodeFillColor(color) {
-  const node = state.nodes.find(n => n.id === state.selectedNodeId);
-  if (!node || normalizeHexColor(node.fillColor) === normalizeHexColor(color)) return;
-  saveState();
-  node.fillColor = color;
-  renderNode(node);
-  syncColorSwatchSelection();
+  const normalized = typeof DiagramWeavePropertyTools !== 'undefined'
+    ? DiagramWeavePropertyTools.normalizeColor(color)
+    : color;
+  if (normalized) applyBatchNodeProperty('fillColor', normalized);
 }
 
 function setNodeStrokeColor(color) {
-  const node = state.nodes.find(n => n.id === state.selectedNodeId);
-  if (!node || normalizeHexColor(node.strokeColor) === normalizeHexColor(color)) return;
-  saveState();
-  node.strokeColor = color;
-  renderNode(node);
-  syncColorSwatchSelection();
+  const normalized = typeof DiagramWeavePropertyTools !== 'undefined'
+    ? DiagramWeavePropertyTools.normalizeColor(color)
+    : color;
+  if (normalized) applyBatchNodeProperty('strokeColor', normalized);
 }
 
 function showExportDialog() {
+  const include = document.getElementById('exportIncludeHistory'); if (include) include.checked = false;
   document.getElementById('exportOverlay').classList.add('visible');
 }
 
@@ -416,17 +442,40 @@ function hideExportDialog() {
   document.getElementById('exportOverlay').classList.remove('visible');
 }
 
-function runExport(format) {
+async function runExport(format) {
+  const includeHistory = document.getElementById('exportIncludeHistory')?.checked === true;
   hideExportDialog();
   if (format === 'png') exportPNG();
   else if (format === 'svg') exportSVG();
   else if (format === 'pdf') exportPDF();
-  else if (format === 'vso') downloadProjectVso();
+  else if (format === 'vso') await downloadProjectVso(includeHistory);
+  else if (format === 'vsdx') await downloadProjectVsdx();
+  else if (format === 'viewer') downloadOfflineViewer();
+}
+
+async function downloadProjectVsdx() {
+  if (typeof DiagramWeaveVisioBridge === 'undefined') return false;
+  try {
+    const blob = await DiagramWeaveVisioBridge.exportVsdx(getFlowDocumentPayload());
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = getProjectFileBaseName() + '.vsdx'; link.click(); URL.revokeObjectURL(link.href);
+    showToast('Controlled VSDX exported'); return true;
+  } catch (error) {
+    showToast(`VSDX export failed: ${error.message}`); return false;
+  }
+}
+
+function downloadOfflineViewer() {
+  if (typeof DiagramWeaveOfflineViewer === 'undefined') return false;
+  const html = DiagramWeaveOfflineViewer.buildViewerHtml(getFlowDocumentPayload(), { title: `${projectSession.name} - Viewer` });
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = getProjectFileBaseName() + '.viewer.html'; link.click(); URL.revokeObjectURL(link.href);
+  showToast('Offline HTML Viewer exported'); return true;
 }
 
 // ===== 流程图模板库 =====
 let allTemplates = [];
 const flowchartTemplates = [];
+let templateFavorites = null;
 
 // 模板图标SVG映射（使用第一个节点的形状）
 const templateIconSVG = {
@@ -451,6 +500,9 @@ function rebuildAllTemplates() {
   if (typeof DiagramWeaveBootstrap !== 'undefined') {
     allTemplates = allTemplates.concat(DiagramWeaveBootstrap.getExternalTemplates());
   }
+  if (typeof DiagramWeaveTemplateCenter !== 'undefined') {
+    allTemplates = allTemplates.map((template, index) => DiagramWeaveTemplateCenter.normalizeTemplate(template, index));
+  }
 }
 
 function initShapeTypeSelect() {
@@ -470,9 +522,25 @@ function resolvePageName(pageId) {
 
 // ===== 初始化模板列表 =====
 function initTemplates() {
-  const grid = document.getElementById('templateDialogGrid');
-  grid.innerHTML = '';
   rebuildAllTemplates();
+  if (!templateFavorites && typeof DiagramWeaveTemplateCenter !== 'undefined') {
+    templateFavorites = DiagramWeaveTemplateCenter.createFavorites(localStorage);
+  }
+  const category = document.getElementById('templateCenterCategory');
+  if (category) {
+    const current = category.value;
+    const categories = [...new Set(allTemplates.map(template => template.category))].sort();
+    category.innerHTML = '<option value="">All categories / 全部分类</option>' + categories.map(value =>
+      `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+    if (categories.includes(current)) category.value = current;
+  }
+  renderTemplateCenter();
+}
+
+function renderTemplateCenter() {
+  const grid = document.getElementById('templateDialogGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
   if (!allTemplates.length) {
     grid.innerHTML = `
       <div class="template-dialog-empty">
@@ -481,7 +549,21 @@ function initTemplates() {
       </div>`;
     return;
   }
-  allTemplates.forEach((tmpl, idx) => {
+  const query = document.getElementById('templateCenterSearch')?.value || '';
+  const category = document.getElementById('templateCenterCategory')?.value || '';
+  const favoriteIds = new Set(templateFavorites?.list() || []);
+  let templates = typeof DiagramWeaveTemplateCenter !== 'undefined'
+    ? DiagramWeaveTemplateCenter.searchTemplates(allTemplates, query, category)
+    : allTemplates;
+  if (document.getElementById('templateFavoritesOnly')?.checked) {
+    templates = templates.filter(template => favoriteIds.has(template.id));
+  }
+  if (!templates.length) {
+    grid.innerHTML = '<div class="template-dialog-empty">No matching templates / 没有匹配模板</div>';
+    return;
+  }
+  templates.forEach(tmpl => {
+    const idx = tmpl.sourceIndex ?? allTemplates.indexOf(tmpl);
     const el = document.createElement('div');
     el.className = 'template-dialog-item';
     const isEn = typeof DiagramWeaveI18n !== 'undefined' && DiagramWeaveI18n.getLocale() === 'en';
@@ -491,18 +573,29 @@ function initTemplates() {
     const icon = (tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v')
       ? (templateIconSVG.swimlane || templateIconSVG.rectangle)
       : (templateIconSVG[tmpl.nodes[0]?.shape] || templateIconSVG.rectangle);
+    const favorite = favoriteIds.has(tmpl.id);
     el.innerHTML = `
-      <div class="template-dialog-item-icon">${icon}</div>
-      <div class="template-dialog-item-name">${escapeHtml(tmplName)}</div>
-      <div class="template-dialog-item-desc">${escapeHtml(tmplDesc)}</div>
-    `;
-    el.addEventListener('click', () => onTemplateDialogClick(idx));
+      <button type="button" class="template-favorite" aria-label="Favorite ${escapeHtml(tmplName)}" aria-pressed="${favorite}" data-template-id="${escapeHtml(tmpl.id)}">${favorite ? '★' : '☆'}</button>
+      <button type="button" class="template-card-apply" aria-label="Apply ${escapeHtml(tmplName)}">
+        <div class="template-dialog-item-icon">${icon}</div>
+        <div class="template-dialog-item-name">${escapeHtml(tmplName)}</div>
+        <div class="template-dialog-item-desc">${escapeHtml(tmplDesc)}</div>
+        <div class="template-item-meta"><span>${escapeHtml(tmpl.category)}</span><span>${tmpl.preview.nodeCount} nodes</span><span>${escapeHtml(tmpl.preview.layout)}</span></div>
+      </button>`;
+    el.querySelector('.template-card-apply').addEventListener('click', () => onTemplateDialogClick(idx));
+    el.querySelector('.template-favorite').addEventListener('click', () => toggleTemplateFavorite(tmpl.id));
     grid.appendChild(el);
   });
 }
 
+function toggleTemplateFavorite(templateId) {
+  templateFavorites?.toggle(templateId);
+  renderTemplateCenter();
+}
+
 // 显示模板选择弹窗
 function showTemplateDialog() {
+  renderTemplateCenter();
   document.getElementById('templateOverlay').classList.add('visible');
 }
 
@@ -557,6 +650,7 @@ function applyTemplate(index) {
     node.role = n.role || '';
     node.fillColor = n.fillColor || node.fillColor;
     node.strokeColor = n.strokeColor || node.strokeColor;
+    node.textColor = n.textColor || 'auto';
     // 保存泳道信息
     if ((tmpl.type === 'swimlane' || tmpl.type === 'swimlane-v') && n.lane !== undefined) {
       node.lane = Math.max(0, parseInt(n.lane, 10) || 0);
@@ -1227,6 +1321,7 @@ function captureUndoSnapshot() {
     connections: state.connections,
     nextId: state.nextId,
     connRouteMode: state.connRouteMode,
+    routingRules: state.routingRules,
   };
 }
 
@@ -1238,6 +1333,7 @@ function applyUndoSnapshot(snap) {
   if (snap.version === 2 && snap.pages && typeof DiagramWeave !== 'undefined') {
     DiagramWeave.loadDocument(snap);
     applyConnRouteModeFromData(snap.connRouteMode);
+    if (typeof DiagramWeaveRoutingRules !== 'undefined') state.routingRules = DiagramWeaveRoutingRules.normalizeRules(snap.routingRules);
     clearCanvasNodes();
     renderAll();
     return;
@@ -1262,9 +1358,13 @@ function applyUndoSnapshot(snap) {
 }
 
 function saveState() {
+  void captureVersionSnapshot('Edit');
   state.undoStack.push(JSON.stringify(captureUndoSnapshot()));
   if (state.undoStack.length > 50) state.undoStack.shift();
   state.redoStack = [];
+  if (!projectSession.fileHandle && !sessionStorage.getItem('dw-initial-save-prompted')) {
+    setTimeout(promptInitialProjectSave, 0);
+  }
 }
 
 function undo() {
@@ -1297,6 +1397,7 @@ function createNode(shape, x, y, label, refId) {
     label: label || shapeNames[shape] || shape,
     fillColor: getDefaultNodeFill(),
     strokeColor: getDefaultNodeStroke(),
+    textColor: 'auto',
     detail: '',
     duration: 0,
     role: '',
@@ -1380,7 +1481,7 @@ function renderNode(node) {
   el.style.height = node.h + 'px';
 
   if (!isNew) {
-    el.className = `node shape-${getNodeVisualShape(node.shape)}` + (state.selectedNodeId === node.id ? ' selected' : '');
+    el.className = `node shape-${getNodeVisualShape(node.shape)}` + (getSelectedNodeIds().includes(node.id) ? ' selected' : '');
   }
 
   const shapeEl = el.querySelector('.node-shape');
@@ -1391,6 +1492,11 @@ function renderNode(node) {
 
   const labelEl = el.querySelector('.node-label');
   labelEl.textContent = node.label;
+  const resolvedTextColor = typeof DiagramWeaveNodeColors !== 'undefined'
+    ? DiagramWeaveNodeColors.resolveTextColor(node.fillColor, node.textColor)
+    : 'var(--text-primary)';
+  labelEl.style.color = resolvedTextColor;
+  labelEl.style.textShadow = resolvedTextColor === '#111320' ? 'none' : '0 1px 1px rgba(0,0,0,0.28)';
 
   // 缩放时反向缩放文字，保持文字清晰度
   if (state.zoom !== 1) {
@@ -1401,7 +1507,7 @@ function renderNode(node) {
 
   updateNodeBriefEl(node, el);
 
-  el.classList.toggle('selected', state.selectedNodeId === node.id);
+  el.classList.toggle('selected', getSelectedNodeIds().includes(node.id));
 }
 
 function updateNodeBriefEl(node, el) {
@@ -1451,6 +1557,89 @@ function renderAllNodes() {
     }
     renderNode(n);
   });
+  updateCanvasEmptyState();
+}
+
+let activePropertyTab = 'content';
+
+function initPropertyEditingWorkflow() {
+  const sectionFor = id => {
+    if (['propLabel', 'propDetail'].includes(id)) return 'content';
+    if (['propRole', 'propTypeSelect', 'propDuration', 'propOffpageRow'].includes(id)) return 'flow';
+    if (['propFillSwatches', 'propStrokeSwatches', 'propTextColorMode'].includes(id)) return 'appearance';
+    return 'data';
+  };
+  document.querySelectorAll('#propsContent .prop-row').forEach(row => {
+    row.dataset.propertySection = sectionFor(row.id || row.querySelector('[id]')?.id || '');
+  });
+  document.getElementById('propTimeSummary')?.setAttribute('data-property-section', 'flow');
+  document.querySelectorAll('#propsContent > .prop-group').forEach(group => {
+    if (group.querySelector('#propFillSwatches')) group.dataset.propertySection = 'appearance';
+  });
+  setPropertyTab('content');
+}
+
+function setPropertyTab(tab) {
+  activePropertyTab = ['content', 'flow', 'appearance', 'data'].includes(tab) ? tab : 'content';
+  document.querySelectorAll('[data-property-tab]').forEach(button =>
+    button.setAttribute('aria-selected', String(button.dataset.propertyTab === activePropertyTab)));
+  document.querySelectorAll('#propsContent .prop-row').forEach(row => {
+    row.hidden = row.dataset.propertySection !== activePropertyTab;
+  });
+  document.querySelectorAll('#propsContent > .prop-group').forEach(group => {
+    group.hidden = group.dataset.propertySection
+      ? group.dataset.propertySection !== activePropertyTab
+      : !group.querySelector(`.prop-row[data-property-section="${activePropertyTab}"]`);
+  });
+  const stats = document.getElementById('propTimeSummary');
+  if (stats) stats.hidden = activePropertyTab !== 'flow';
+}
+
+function getSelectedNodes() {
+  const selected = new Set(getSelectedNodeIds());
+  return state.nodes.filter(node => selected.has(node.id));
+}
+
+function applyBatchNodeProperty(field, value) {
+  const nodes = getSelectedNodes();
+  if (!nodes.length || typeof DiagramWeavePropertyTools === 'undefined') return false;
+  const patches = DiagramWeavePropertyTools.createBatchPatches(nodes, field, value);
+  if (!patches.length) return false;
+  saveState();
+  const byId = new Map(patches.map(patch => [patch.id, patch]));
+  nodes.forEach(node => Object.assign(node, byId.get(node.id) || {}));
+  renderAll();
+  nodes.forEach(syncFlowTableRowFromNode);
+  return true;
+}
+
+function syncMixedPropertyControl(id, nodes, field, fallback = '') {
+  const control = document.getElementById(id);
+  if (!control || typeof DiagramWeavePropertyTools === 'undefined') return;
+  const result = DiagramWeavePropertyTools.mixedValue(nodes, field, fallback);
+  control.dataset.mixed = String(result.mixed);
+  if (control.tagName === 'SELECT' && result.mixed) {
+    let option = control.querySelector('option[value="__mixed__"]');
+    if (!option) { option = new Option('Mixed', '__mixed__'); control.prepend(option); }
+    control.value = '__mixed__';
+  } else if (control.tagName === 'SELECT') {
+    control.querySelector('option[value="__mixed__"]')?.remove();
+    control.value = String(result.value);
+  } else {
+    control.value = result.mixed ? '' : String(result.value);
+    if (result.mixed) control.placeholder = 'Mixed';
+  }
+}
+
+function renderNodeContextToolbar() {
+  const toolbar = document.getElementById('nodeContextToolbar');
+  const nodeElement = state.selectedNodeId ? document.getElementById(state.selectedNodeId) : null;
+  if (!toolbar || !nodeElement || presentState.active) { if (toolbar) toolbar.hidden = true; return; }
+  const wrapperRect = canvasWrapper.getBoundingClientRect();
+  const nodeRect = nodeElement.getBoundingClientRect();
+  toolbar.hidden = false;
+  toolbar.style.left = `${Math.max(8, nodeRect.left - wrapperRect.left)}px`;
+  toolbar.style.top = `${Math.max(8, nodeRect.top - wrapperRect.top - 40)}px`;
 }
 
 // ===== 渲染连线 =====
@@ -1515,17 +1704,68 @@ function rebuildConnRouteSelect() {
 }
 
 function bindShapeItemElement(item) {
+  if (item.dataset.shapeBound === 'true') return;
+  item.dataset.shapeBound = 'true';
+  item.setAttribute('role', 'group');
+  item.setAttribute('aria-keyshortcuts', 'Enter Space F');
+  item.tabIndex = 0;
+  if (!item.getAttribute('aria-label')) item.setAttribute('aria-label', item.dataset.label || item.dataset.shape);
   item.addEventListener('dragstart', (e) => {
     e.dataTransfer.setData('shape', item.dataset.shape);
     e.dataTransfer.setData('label', item.dataset.label);
     e.dataTransfer.effectAllowed = 'copy';
   });
+  item.addEventListener('dblclick', () => insertShapeFromLibrary(item));
+  item.addEventListener('keydown', (e) => {
+    if (e.key.toLocaleLowerCase() === 'f') {
+      e.preventDefault();
+      toggleShapeFavorite(item.dataset.shape);
+      return;
+    }
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    insertShapeFromLibrary(item);
+  });
+  if (!item.querySelector('.shape-favorite-btn')) {
+    const favorite = document.createElement('button');
+    favorite.type = 'button';
+    favorite.className = 'shape-favorite-btn';
+    favorite.setAttribute('aria-label', `Favorite ${item.dataset.label || item.dataset.shape}`);
+    favorite.title = 'Favorite';
+    favorite.textContent = '☆';
+    favorite.addEventListener('click', event => {
+      event.preventDefault(); event.stopPropagation();
+      toggleShapeFavorite(item.dataset.shape);
+    });
+    item.appendChild(favorite);
+  }
+}
+
+function insertShapeFromLibrary(item) {
+  if (isMobileViewMode()) return null;
+  const shape = item?.dataset.shape;
+  if (!shape) return null;
+  const label = item.dataset.label || shapeNames[shape] || shape;
+  const defaults = shapeDefaults[shape] || { w: 140, h: 60 };
+  const x = (canvasWrapper.clientWidth / 2 - state.panX) / state.zoom - defaults.w / 2;
+  const y = (canvasWrapper.clientHeight / 2 - state.panY) / state.zoom - defaults.h / 2;
+  saveState();
+  const node = createNode(shape, x, y, label);
+  state.nodes.push(node);
+  recordRecentShape(shape);
+  selectNode(node.id);
+  showToast(typeof t === 'function' ? t('toast.addedShape', { label }) : `Added ${label}`);
+  return node;
 }
 
 function registerRemoteShape(entry) {
   if (!entry?.id) return;
   shapeDefaults[entry.id] = entry.defaults || { w: 140, h: 60 };
   shapeNames[entry.id] = entry.label || entry.id;
+  shapeLibraryRegistry?.register({
+    id: entry.id, label: entry.label, category: entry.category || 'Remote',
+    packId: entry.packId || 'remote', keywords: entry.keywords || [], defaults: entry.defaults, renderAs: entry.renderAs,
+  });
   if (entry.renderAs && entry.renderAs !== entry.id) {
     shapeRenderAs[entry.id] = entry.renderAs;
   }
@@ -1535,13 +1775,15 @@ function registerRemoteShape(entry) {
   const section = document.getElementById('remoteShapesSection');
   const grid = document.getElementById('remoteShapesGrid');
   if (!section || !grid) return;
+  grid.querySelector(`[data-shape="${CSS.escape(entry.id)}"]`)?.remove();
   section.style.display = '';
   const el = document.createElement('div');
   el.className = 'shape-item';
   el.draggable = true;
   el.dataset.shape = entry.id;
   el.dataset.label = entry.label || entry.id;
-  el.innerHTML = `${entry.svg}<span class="shape-item-label">${escapeHtml(entry.label || entry.id)}</span>`;
+  el.dataset.packId = entry.packId || 'remote';
+  el.innerHTML = `${sanitizeSvg(entry.svg)}<span class="shape-item-label">${escapeHtml(entry.label || entry.id)}</span>`;
   bindShapeItemElement(el);
   grid.appendChild(el);
   initShapeTypeSelect();
@@ -2014,7 +2256,7 @@ function getConnectionPathAvoidance(from, to, fromPort, toPort, routeOpts) {
       [...samples, ...chordSamples],
       fromNodeId,
       toNodeId,
-      18,
+      state.routingRules?.obstaclePadding ?? 18,
       { avoidSegments },
     );
     if (hits < bestHits) {
@@ -2044,7 +2286,7 @@ function getConnectionPath(from, to, fromPort, toPort, routeOpts) {
     samples,
     routeOpts?.fromNodeId,
     routeOpts?.toNodeId,
-    12,
+    state.routingRules?.obstaclePadding ?? 12,
     { avoidSegments: routeOpts?.avoidSegments },
   );
   return hits > 0
@@ -2189,6 +2431,8 @@ function findConnectionCrossings(dataList) {
 }
 
 function buildBridgeSvgFragments(dataList, bridgeBg) {
+  const behavior = state.routingRules?.bridgeBehavior || 'jump';
+  if (behavior === 'none') return '';
   const crossings = findConnectionCrossings(dataList);
   let svg = '';
   dataList.forEach(data => {
@@ -2204,7 +2448,7 @@ function buildBridgeSvgFragments(dataList, bridgeBg) {
       const ny = ux;
       const half = Math.min(12, Math.max(7, len * 0.22));
       const gapHalf = Math.max(3, half - 4);
-      const height = 8;
+      const height = state.routingRules?.bridgeSize || 8;
       const p1 = { x: hit.x - ux * half, y: hit.y - uy * half };
       const p2 = { x: hit.x + ux * half, y: hit.y + uy * half };
       const g1 = { x: hit.x - ux * gapHalf, y: hit.y - uy * gapHalf };
@@ -2212,19 +2456,20 @@ function buildBridgeSvgFragments(dataList, bridgeBg) {
       const cp = { x: hit.x + nx * height, y: hit.y + ny * height };
       const bridgeD = `M${p1.x},${p1.y} Q${cp.x},${cp.y} ${p2.x},${p2.y}`;
       svg += `<path class="connection-bridge-gap" d="M${g1.x},${g1.y} L${g2.x},${g2.y}" fill="none" stroke="${bridgeBg}" stroke-width="${data.width + 4}" stroke-linecap="round" pointer-events="none"/>`;
-      svg += `<path class="connection-bridge" d="${bridgeD}" fill="none" stroke="${data.color}" stroke-width="${data.width}" stroke-linecap="round" pointer-events="none" data-conn-id="${data.conn.id}"/>`;
+      if (behavior === 'jump') svg += `<path class="connection-bridge" d="${bridgeD}" fill="none" stroke="${data.color}" stroke-width="${data.width}" stroke-linecap="round" pointer-events="none" data-conn-id="${data.conn.id}"/>`;
     });
   });
   return svg;
 }
 
-function getConnLabelLayout(from, to, labelPos) {
+function getConnLabelLayout(from, to, labelPos, labelOffset) {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const mx = (from.x + to.x) / 2;
   const my = (from.y + to.y) / 2;
   const gap = 12;
   const mode = labelPos || 'auto';
+  if (mode === 'custom') return { x: mx + (labelOffset?.x || 0), y: my + (labelOffset?.y || 0), anchor: 'middle', baseline: 'middle' };
   const placeAbove = mode === 'above' || (mode === 'auto' && Math.abs(dx) > Math.abs(dy));
   if (placeAbove) {
     return { x: mx, y: my - gap, anchor: 'middle', baseline: 'auto' };
@@ -2237,19 +2482,26 @@ function getConnectionRenderData(conn, avoidSegments = [], options = {}) {
   const toNode = state.nodes.find(n => n.id === conn.to);
   if (!fromNode || !toNode) return null;
 
-  const from = getPortPos(fromNode, conn.fromPort);
-  const to = getPortPos(toNode, conn.toPort);
+  const effectivePorts = state.routingRules?.endpointLock === false ? computeConnPorts(fromNode, toNode) : conn;
+  const fromPort = effectivePorts.fromPort || conn.fromPort;
+  const toPort = effectivePorts.toPort || conn.toPort;
+  const from = getPortPos(fromNode, fromPort);
+  const to = getPortPos(toNode, toPort);
   const isSelected = state.selectedConnectionId === conn.id;
   const color = isSelected ? getThemeVar('--accent', '#6c8cff') : getThemeVar('--conn-color', '#6b6f85');
   const width = isSelected ? 2.5 : 1.8;
-  const pathD = getConnectionPath(from, to, conn.fromPort, conn.toPort, {
+  const routeOpts = {
     fromNodeId: conn.from,
     toNodeId: conn.to,
     avoidSegments,
     fastRouting: options.fastRouting,
-  });
+  };
+  const waypoints = Array.isArray(conn.waypoints) ? conn.waypoints : [];
+  const pathD = waypoints.length
+    ? `M${from.x},${from.y} ${waypoints.map(point => `L${point.x},${point.y}`).join(' ')} L${to.x},${to.y}`
+    : getConnectionPath(from, to, fromPort, toPort, routeOpts);
   const points = sampleSvgPath(pathD, 12);
-  const layout = conn.label ? getConnLabelLayout(from, to, conn.labelPos) : null;
+  const layout = conn.label ? getConnLabelLayout(from, to, conn.labelPlacement || conn.labelPos, conn.labelOffset) : null;
   return { conn, color, width, pathD, points, layout };
 }
 
@@ -2261,6 +2513,9 @@ function buildConnectionSvgFragment(data) {
   </marker></defs>`;
   svg += `<path class="connection-hitarea" d="${pathD}" fill="none" stroke="transparent" stroke-width="16" data-conn-id="${conn.id}"/>`;
   svg += `<path class="connection-line" d="${pathD}" fill="none" stroke="${color}" stroke-width="${width}" marker-end="url(#${markerId})" data-conn-id="${conn.id}"/>`;
+  if (Array.isArray(conn.waypoints) && conn.waypoints.length && state.selectedConnectionId === conn.id) {
+    conn.waypoints.forEach((point, index) => { svg += `<circle class="connection-waypoint${point.locked ? ' locked' : ''}" cx="${point.x}" cy="${point.y}" r="5" data-conn-id="${conn.id}" data-waypoint-index="${index}"/>`; });
+  }
   if (conn.label && layout) {
     svg += `<text class="connection-label" data-conn-id="${conn.id}" x="${layout.x}" y="${layout.y}" fill="${color}" font-size="11" text-anchor="${layout.anchor}" dominant-baseline="${layout.baseline}" font-family="DiagramWeaveZh, Microsoft YaHei, sans-serif">${escapeHtml(conn.label)}</text>`;
   }
@@ -2451,6 +2706,9 @@ function renderAll() {
   renderAllNodes();
   renderConnections();
   updateProperties();
+  renderOutlinePanel();
+  renderCanvasMinimap();
+  renderNodeContextToolbar();
   // 演示模式下应用样式和更新内容面板位置
   if (presentState.active) {
     applyPresentationStyles();
@@ -2468,6 +2726,7 @@ function getPortPos(node, port) {
 function setupNodeEvents(el, node) {
   // 鼠标按下
   el.addEventListener('mousedown', (e) => {
+    if (isMobileViewMode()) { e.preventDefault(); selectNode(node.id); return; }
     if (state.tool === 'pan') return;
 
     // 检查是否点击了端口（包括端口的热区伪元素）
@@ -2497,7 +2756,7 @@ function setupNodeEvents(el, node) {
     }
 
     e.stopPropagation();
-    selectNode(node.id);
+    selectNode(node.id, e.shiftKey || e.ctrlKey || e.metaKey);
 
     // 开始拖拽
     state.isDragging = true;
@@ -2747,8 +3006,25 @@ function selectConnection(connId) {
   syncFlowTableConnHighlight(connId);
 }
 
-function selectNode(nodeId) {
-  state.selectedNodeId = nodeId;
+function getSelectedNodeIds() {
+  const ids = Array.isArray(state.selectedNodeIds) ? state.selectedNodeIds : [];
+  const valid = ids.filter(id => state.nodes.some(node => node.id === id));
+  if (!valid.length && state.selectedNodeId && state.nodes.some(node => node.id === state.selectedNodeId)) valid.push(state.selectedNodeId);
+  state.selectedNodeIds = [...new Set(valid)];
+  return state.selectedNodeIds;
+}
+
+function selectNode(nodeId, additive = false) {
+  const selected = getSelectedNodeIds();
+  if (additive) {
+    state.selectedNodeIds = selected.includes(nodeId)
+      ? selected.filter(id => id !== nodeId)
+      : [...selected, nodeId];
+    state.selectedNodeId = state.selectedNodeIds.at(-1) || null;
+  } else {
+    state.selectedNodeId = nodeId;
+    state.selectedNodeIds = nodeId ? [nodeId] : [];
+  }
   state.selectedConnectionId = null;
   renderAll();
   syncFlowTableHighlight();
@@ -2808,6 +3084,7 @@ function loadE2eSeedNodesFromSession() {
 
 function deselectAll() {
   state.selectedNodeId = null;
+  state.selectedNodeIds = [];
   state.selectedConnectionId = null;
   renderAll();
 }
@@ -2860,13 +3137,15 @@ function editLabel() {
 // ===== 删除 =====
 function deleteSelected() {
   hideContextMenu();
-  if (state.selectedNodeId) {
+  const selectedIds = getSelectedNodeIds();
+  if (selectedIds.length) {
     saveState();
-    const el = document.getElementById(state.selectedNodeId);
-    if (el) el.remove();
-    state.nodes = state.nodes.filter(n => n.id !== state.selectedNodeId);
-    state.connections = state.connections.filter(c => c.from !== state.selectedNodeId && c.to !== state.selectedNodeId);
+    selectedIds.forEach(id => document.getElementById(id)?.remove());
+    const selectedSet = new Set(selectedIds);
+    state.nodes = state.nodes.filter(n => !selectedSet.has(n.id));
+    state.connections = state.connections.filter(c => !selectedSet.has(c.from) && !selectedSet.has(c.to));
     state.selectedNodeId = null;
+    state.selectedNodeIds = [];
     renderAll();
     showToast('已删除形状');
   } else if (state.selectedConnectionId) {
@@ -2904,6 +3183,7 @@ function duplicateSelected() {
   newNode.h = node.h;
   newNode.fillColor = node.fillColor;
   newNode.strokeColor = node.strokeColor;
+  newNode.textColor = node.textColor || 'auto';
   state.nodes.push(newNode);
   selectNode(newNode.id);
   showToast('已复制');
@@ -3084,6 +3364,12 @@ function updateProperties() {
   if (state.selectedNodeId) {
     const node = state.nodes.find(n => n.id === state.selectedNodeId);
     if (!node) return;
+    const selectedNodes = getSelectedNodes();
+    const batchStatus = document.getElementById('propertyBatchStatus');
+    if (batchStatus) {
+      batchStatus.hidden = selectedNodes.length < 2;
+      batchStatus.textContent = selectedNodes.length > 1 ? `${selectedNodes.length} nodes selected · batch editing` : '';
+    }
     if (empty) empty.style.display = 'none';
     if (pageContent) pageContent.style.display = 'none';
     content.style.display = 'block';
@@ -3097,6 +3383,21 @@ function updateProperties() {
     document.getElementById('propLabel').value = node.label;
     document.getElementById('propTypeSelect').value = node.shape;
     syncColorSwatchSelection();
+    const textColorMode = document.getElementById('propTextColorMode');
+    const textColorCustom = document.getElementById('propTextColorCustom');
+    const nodeTextColor = node.textColor || 'auto';
+    if (textColorMode) {
+      textColorMode.value = ['auto', '#111320', '#ffffff'].includes(nodeTextColor)
+        ? nodeTextColor
+        : 'custom';
+    }
+    if (textColorCustom) {
+      textColorCustom.value = /^#[0-9a-f]{6}$/i.test(nodeTextColor)
+        ? nodeTextColor
+        : (typeof DiagramWeaveNodeColors !== 'undefined'
+          ? DiagramWeaveNodeColors.resolveTextColor(node.fillColor, nodeTextColor)
+          : '#ffffff');
+    }
     document.getElementById('propDetail').value = node.detail || '';
     document.getElementById('propDuration').value = node.duration || '';
     const propRole = document.getElementById('propRole');
@@ -3107,6 +3408,15 @@ function updateProperties() {
       propLayer.innerHTML = page.layers.map(l =>
         `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join('');
       propLayer.value = String(node.layer ?? 0);
+    }
+    if (selectedNodes.length > 1) {
+      syncMixedPropertyControl('propRole', selectedNodes, 'role', '');
+      syncMixedPropertyControl('propLayer', selectedNodes, 'layer', 0);
+      syncMixedPropertyControl('propTextColorMode', selectedNodes, 'textColor', 'auto');
+      const fill = DiagramWeavePropertyTools.mixedValue(selectedNodes, 'fillColor', getDefaultNodeFill());
+      const stroke = DiagramWeavePropertyTools.mixedValue(selectedNodes, 'strokeColor', getDefaultNodeStroke());
+      if (fill.mixed) document.querySelectorAll('#propFillSwatches .color-swatch').forEach(button => button.classList.remove('selected'));
+      if (stroke.mixed) document.querySelectorAll('#propStrokeSwatches .color-swatch').forEach(button => button.classList.remove('selected'));
     }
     const offpageRow = document.getElementById('propOffpageRow');
     const propTargetPage = document.getElementById('propTargetPage');
@@ -3126,6 +3436,8 @@ function updateProperties() {
     document.getElementById('propTimeSummary').style.display = 'block';
     updateTimeSummary();
   } else {
+    const batchStatus = document.getElementById('propertyBatchStatus');
+    if (batchStatus) batchStatus.hidden = true;
     if (empty) empty.style.display = 'none';
     content.style.display = 'none';
     if (pageContent) {
@@ -3262,11 +3574,1140 @@ function updatePropDuration(val) {
 }
 
 function updatePropRole(val) {
-  const node = state.nodes.find(n => n.id === state.selectedNodeId);
-  if (!node) return;
+  applyBatchNodeProperty('role', val.trim());
+}
+
+function initAccessibility() {
+  document.querySelectorAll('button').forEach(button => {
+    if (button.getAttribute('aria-label')) return;
+    const label = button.getAttribute('title')
+      || button.dataset.fcTip
+      || button.dataset.i18nTitle
+      || button.textContent.trim();
+    if (label) button.setAttribute('aria-label', label);
+  });
+
+  document.querySelectorAll('.template-dialog, .confirm-dialog, .layout-dialog, .branch-selector, .import-preview-dialog, .mapping-wizard-dialog').forEach((dialog, index) => {
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.tabIndex = -1;
+    const title = dialog.querySelector('.template-dialog-title, .confirm-title, .layout-dialog-title, .branch-selector-title, #importPreviewTitle, #mappingWizardTitle');
+    if (title) {
+      if (!title.id) title.id = `dw-dialog-title-${index + 1}`;
+      dialog.setAttribute('aria-labelledby', title.id);
+    } else if (!dialog.getAttribute('aria-label')) {
+      dialog.setAttribute('aria-label', 'DiagramWeave dialog');
+    }
+  });
+
+  document.querySelectorAll('.shape-item').forEach(item => {
+    item.setAttribute('role', 'group');
+    item.setAttribute('aria-keyshortcuts', 'Enter Space F');
+    item.tabIndex = 0;
+    if (!item.getAttribute('aria-label')) {
+      item.setAttribute('aria-label', item.dataset.label || item.textContent.trim());
+    }
+  });
+}
+
+const MODAL_OVERLAY_IDS = [
+  'templateOverlay', 'commandPaletteOverlay', 'importPreviewOverlay', 'mappingWizardOverlay',
+  'excelDataOverlay', 'exportOverlay', 'settingsOverlay', 'confirmOverlay', 'layoutOverlay', 'branchOverlay',
+];
+let activeModalOverlay = null;
+const modalTriggers = new WeakMap();
+
+function modalFocusableElements(overlay) {
+  return [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => !element.hidden && element.getClientRects().length > 0);
+}
+
+function setModalBackgroundInert(overlay, inert) {
+  [...document.body.children].forEach(element => { if (element !== overlay) element.inert = inert; });
+}
+
+function activateModalContract(overlay) {
+  if (activeModalOverlay === overlay) return;
+  modalTriggers.set(overlay, document.activeElement);
+  activeModalOverlay = overlay;
+  overlay.setAttribute('aria-hidden', 'false');
+  setModalBackgroundInert(overlay, true);
+  const preferredFocus = {
+    commandPaletteOverlay: '#commandPaletteInput',
+    importPreviewOverlay: '#applyImportPreviewBtn',
+    mappingWizardOverlay: '#nodeMappingFields select',
+  };
+  requestAnimationFrame(() => {
+    const preferred = preferredFocus[overlay.id] ? overlay.querySelector(preferredFocus[overlay.id]) : null;
+    (preferred || modalFocusableElements(overlay)[0])?.focus();
+  });
+}
+
+function deactivateModalContract(overlay) {
+  overlay.setAttribute('aria-hidden', 'true');
+  if (activeModalOverlay !== overlay) return;
+  setModalBackgroundInert(overlay, false);
+  activeModalOverlay = null;
+  const trigger = modalTriggers.get(overlay);
+  if (trigger?.isConnected) requestAnimationFrame(() => trigger.focus());
+}
+
+function closeActiveModal() {
+  if (!activeModalOverlay) return;
+  const closeById = {
+    templateOverlay: hideTemplateDialog, commandPaletteOverlay: closeCommandPalette,
+    importPreviewOverlay: cancelImportPreview, mappingWizardOverlay: cancelMappingWizard,
+    excelDataOverlay: hideExcelDataDialog, exportOverlay: hideExportDialog,
+    settingsOverlay: hideSettingsDialog, confirmOverlay: hideConfirm,
+    layoutOverlay: hideLayoutDialog, branchOverlay: cancelBranchSelector,
+  };
+  closeById[activeModalOverlay.id]?.();
+}
+
+function initModalContracts() {
+  MODAL_OVERLAY_IDS.forEach((id, index) => {
+    const overlay = document.getElementById(id);
+    if (!overlay) return;
+    const dialog = overlay.querySelector('[role="dialog"], .template-dialog, .confirm-dialog, .layout-dialog, .branch-selector');
+    if (dialog) {
+      dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true');
+      let title = dialog.querySelector('h1, h2, .template-dialog-title, .confirm-title, .layout-title, .layout-dialog-title, .branch-selector-title, .excel-data-title');
+      if (!title) {
+        title = document.createElement('span');
+        title.className = 'dw-visually-hidden';
+        title.textContent = dialog.getAttribute('aria-label') || 'DiagramWeave dialog';
+        dialog.prepend(title);
+      }
+      if (!title.id) title.id = `dw-modal-title-${index + 1}`;
+      dialog.setAttribute('aria-labelledby', title.id);
+      dialog.removeAttribute('aria-label');
+    }
+    overlay.setAttribute('aria-hidden', overlay.classList.contains('visible') ? 'false' : 'true');
+    new MutationObserver(() => {
+      if (overlay.classList.contains('visible')) activateModalContract(overlay);
+      else deactivateModalContract(overlay);
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  });
+  document.addEventListener('keydown', event => {
+    if (!activeModalOverlay) return;
+    if (event.key === 'Escape') {
+      event.preventDefault(); event.stopImmediatePropagation(); closeActiveModal(); return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = modalFocusableElements(activeModalOverlay);
+    if (!focusable.length) return;
+    const first = focusable[0]; const last = focusable.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }, true);
+}
+
+function isMobileViewMode() {
+  return window.matchMedia('(max-width: 767px)').matches;
+}
+
+function openMobileReview() {
+  window.dispatchEvent(new CustomEvent('DiagramWeave:open-review'));
+  showReviewPanel();
+}
+
+let pendingImportPreview = null;
+let importPreviewTrigger = null;
+
+function createImportPreview(raw, sourceType = 'json') {
+  if (typeof DiagramWeaveExtensionKernel !== 'undefined') {
+    return DiagramWeaveExtensionKernel.invokeExtension('import.preview.document', {
+      raw, sourceType, options: { knownShapes: shapeDefaults },
+    });
+  }
+  return DiagramWeaveImportPreview.createDocumentPreview(raw, {
+    sourceType, sanitizeOptions: { knownShapes: shapeDefaults },
+  });
+}
+
+function queueDocumentImport(raw, options) {
+  const rawNodes = raw?.version === 2
+    ? raw.pages?.flatMap(page => page.nodes || [])
+    : raw?.nodes;
+  const rawConnections = raw?.version === 2
+    ? raw.pages?.flatMap(page => page.connections || [])
+    : raw?.connections;
+  const requiresMapping = Array.isArray(rawNodes) && rawNodes.length > 0
+    && rawNodes.some(node => !node || !Object.prototype.hasOwnProperty.call(node, 'id'));
+  if (requiresMapping) {
+    startMappingWizard({
+      nodeRows: rawNodes,
+      connectionRows: Array.isArray(rawConnections) ? rawConnections : [],
+      sourceName: options.sourceName,
+      sourceType: options.sourceType || 'json',
+      onApply: options.apply,
+    });
+    return;
+  }
+  const preview = createImportPreview(raw, options.sourceType || 'json');
+  preview.issues = [...(preview.issues || []), ...(options.issues || [])];
+  preview.warnings = [...(preview.warnings || []), ...(options.warnings || [])];
+  showImportPreview(preview, {
+    sourceName: options.sourceName,
+    apply: options.apply,
+  });
+}
+
+function showImportPreview(result, options = {}) {
+  const overlay = document.getElementById('importPreviewOverlay');
+  const summary = result?.data?.summary || { pages: 0, nodes: 0, connections: 0, cycles: 0 };
+  pendingImportPreview = { result, apply: options.apply };
+  importPreviewTrigger = document.activeElement;
+  [...document.body.children].forEach(element => {
+    if (element !== overlay) element.inert = true;
+  });
+  document.getElementById('importPreviewSource').textContent = options.sourceName
+    ? `${options.sourceName} · 确认后才会修改当前画布`
+    : '确认后才会修改当前画布';
+  document.getElementById('importPreviewSummary').innerHTML = [
+    ['页面', summary.pages], ['节点', summary.nodes], ['连线', summary.connections], ['循环', summary.cycles || 0],
+  ].map(([label, value]) => `<div class="import-preview-stat"><strong>${Number(value) || 0}</strong><span>${label}</span></div>`).join('');
+  const items = [...(result?.issues || []), ...(result?.warnings || [])];
+  const issues = document.getElementById('importPreviewIssues');
+  if (!items.length) issues.innerHTML = '<div class="import-preview-empty">未发现需要跳过的行或警告</div>';
+  else issues.replaceChildren(...items.map(item => {
+    const row = document.createElement('div');
+    row.className = `import-preview-issue ${item.severity === 'warning' ? 'warning' : ''}`;
+    const heading = document.createElement('strong');
+    heading.textContent = item.severity === 'warning' ? '警告' : '跳过';
+    const detail = document.createElement('span');
+    detail.textContent = ` 第 ${item.row || '-'} 行 · ${item.field || 'document'} · ${item.reason || item.message || item.code}`;
+    row.append(heading, detail);
+    return row;
+  }));
+  document.getElementById('applyImportPreviewBtn').disabled = !result?.success || !result?.data?.document;
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => document.getElementById('applyImportPreviewBtn').focus());
+}
+
+async function processExternalDiagramFile(file, format) {
+  if (!file || !['mermaid', 'bpmn'].includes(format) || typeof DiagramWeaveExtensionKernel === 'undefined') return false;
+  const operation = format === 'mermaid' ? 'import.mermaid' : 'import.bpmn'; const input = format === 'mermaid' ? { text: await file.text() } : { xml: await file.text() };
+  const converted = await DiagramWeaveExtensionKernel.invokeExtensionAsync(operation, input);
+  if (!converted.success || !converted.data?.document) { const message = converted.issues?.[0]?.message?.en || converted.issues?.[0]?.message || `Unable to import ${format}`; showToast(String(message)); return false; }
+  const preview = createImportPreview(converted.data.document, format);
+  preview.issues.push(...(converted.issues || []), ...(converted.warnings || []));
+  showImportPreview(preview, { sourceName: file.name, apply: document => loadFlowDocumentPayload(document) }); return true;
+}
+
+function cancelImportPreview() {
+  const overlay = document.getElementById('importPreviewOverlay');
+  if (!overlay?.classList.contains('visible')) return;
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  [...document.body.children].forEach(element => {
+    if (element !== overlay) element.inert = false;
+  });
+  pendingImportPreview = null;
+  if (importPreviewTrigger?.focus) importPreviewTrigger.focus();
+}
+
+async function applyPendingImportPreview() {
+  const pending = pendingImportPreview;
+  if (!pending?.result?.success || !pending.result.data?.document) return false;
+  const applied = pending.apply
+    ? await pending.apply(pending.result.data.document)
+    : loadFlowDocumentPayload(pending.result.data.document);
+  if (applied !== false) cancelImportPreview();
+  return applied !== false;
+}
+
+function getCommandContext() {
+  return { state, editor: window, document: typeof DiagramWeave !== 'undefined' ? DiagramWeave.doc : null };
+}
+
+function initEditorCommands() {
+  const api = typeof DiagramWeave !== 'undefined' ? DiagramWeave.commands : null;
+  if (!api || api.listCommands().length) return;
+  const register = (id, label, keywords, shortcut, run, when) => api.registerCommand({
+    id, labelKey: label, label, keywords, shortcut, run, when,
+  });
+  register('tool.select', '选择工具 / Select', ['选择', 'select', 'pointer'], 'V', () => setTool('select'));
+  register('tool.connect', '连线工具 / Connect', ['连线', 'connect', 'edge'], 'L', () => setTool('connect'));
+  register('edit.undo', '撤销 / Undo', ['撤销', 'undo'], 'Ctrl+Z', () => undo(), () => state.undoStack.length > 0);
+  register('edit.redo', '重做 / Redo', ['重做', 'redo'], 'Ctrl+Shift+Z', () => redo(), () => state.redoStack.length > 0);
+  register('layout.auto', '自动布局 / Auto layout', ['布局', 'layout', 'arrange'], '', () => autoLayoutNodes('TB', 'normal'), () => state.nodes.length > 1);
+  register('template.open', '模板中心 / Templates', ['模板', 'template'], '', () => showTemplateDialog());
+  register('project.import', '导入项目 / Import', ['导入', 'import', 'excel'], '', () => triggerProjectExcelUpload());
+  register('project.importMermaid', '导入 Mermaid / Import Mermaid', ['导入', 'mermaid', 'mmd', 'flowchart'], '', () => document.getElementById('mermaidFileInput')?.click());
+  register('project.importBpmn', '导入 BPMN / Import BPMN', ['导入', 'bpmn', 'xml', 'process'], '', () => document.getElementById('bpmnFileInput')?.click());
+  register('project.export', '导出 / Export', ['导出', 'export', 'png', 'svg', 'pdf'], '', () => showExportDialog());
+  register('view.resetZoom', '重置缩放 / Reset zoom', ['缩放', 'zoom', '100%'], '0', () => zoomReset());
+  register('view.fitAll', '适应全部 / Fit all', ['适应', '全部', 'fit all'], '', () => fitAllNodes(), () => state.nodes.length > 0);
+  register('view.fitSelection', '适应选区 / Fit selection', ['适应', '选区', 'fit selection'], '', () => fitSelectedNodes(), () => getSelectedNodeIds().length > 0);
+  register('view.outline', '显示大纲 / Outline', ['大纲', 'outline', '节点搜索'], '', () => toggleOutlinePanel());
+  ['left', 'center', 'right', 'top', 'middle', 'bottom'].forEach(mode => {
+    register(`layout.align.${mode}`, `对齐 ${mode} / Align ${mode}`, ['对齐', 'align', mode], '', () => runAlignCommand(mode), () => getSelectedNodeIds().length > 1);
+  });
+  ['horizontal', 'vertical'].forEach(axis => {
+    register(`layout.distribute.${axis}`, `等距分布 ${axis} / Distribute ${axis}`, ['等距', '分布', 'distribute', axis], '', () => runDistributeCommand(axis), () => getSelectedNodeIds().length > 2);
+  });
+  register('project.blank', '新建空白流程 / Blank diagram', ['新建', '空白', 'blank'], '', () => dismissCanvasEmptyState());
+  register('routing.rules', '连线规则 / Connection rules', ['连线', '路由', '规则', 'routing', 'connection rules'], '', () => showRoutingRulesPanel());
+  register('history.local', '版本历史 / Version history', ['版本', '历史', '恢复', 'history', 'restore'], '', () => showVersionHistory());
+  register('quality.check', '流程质量检查 / Process quality check', ['质量', '检查', '问题', 'quality', 'validation'], '', () => showQualityChecker());
+  register('analysis.process', '流程分析 / Process analysis', ['分析', '关键路径', '瓶颈', 'SLA', 'analysis', 'critical path', 'bottleneck'], '', () => showProcessAnalysis());
+  register('review.open', '评论审阅 / Comments and review', ['评论', '审阅', '批准', 'review', 'comment', 'approve'], '', () => showReviewPanel());
+  register('ai.settings', 'AI 提供者设置 / AI provider settings', ['AI', 'provider', '权限', 'preview', 'disable'], '', () => showAISettings());
+}
+
+function collectPaletteItems(query) {
+  const needle = String(query || '').trim().toLocaleLowerCase();
+  const matches = value => !needle || String(value || '').toLocaleLowerCase().includes(needle);
+  const structuralCommands = /^(tool\.|edit\.|layout\.|routing\.|history\.|project\.(blank|import)|template\.)/;
+  const commandItems = DiagramWeave.commands.searchCommands(needle, getCommandContext())
+    .filter(command => !isMobileViewMode() || !structuralCommands.test(command.id))
+    .map(command => ({
+    kind: 'command', id: command.id, label: command.label, meta: command.shortcut || '命令',
+  }));
+  const pages = (DiagramWeave.doc?.pages || []).filter(page => matches(page.name)).map(page => ({
+    kind: 'page', id: page.id, label: page.name, meta: '页面',
+  }));
+  const nodes = state.nodes.filter(node => matches(node.label)).map(node => ({
+    kind: 'node', id: node.id, label: node.label || node.id, meta: '节点',
+  }));
+  const templates = allTemplates.map((template, index) => ({ template, index }))
+    .filter(item => matches(`${item.template.name} ${item.template.nameEn || ''}`))
+    .map(item => ({ kind: 'template', id: String(item.index), label: item.template.name, meta: '模板' }));
+  return [...commandItems, ...pages, ...nodes, ...templates].slice(0, 40);
+}
+
+function renderCommandPalette(query = '') {
+  const results = document.getElementById('commandPaletteResults');
+  if (!results || typeof DiagramWeave === 'undefined' || !DiagramWeave.commands) return;
+  const items = collectPaletteItems(query);
+  results.replaceChildren(...items.map(item => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'command-palette-item';
+    button.setAttribute('role', 'option');
+    button.innerHTML = `<span>${escapeHtml(item.label)}</span><small>${escapeHtml(item.meta)}</small>`;
+    button.addEventListener('click', () => runPaletteItem(item.kind, item.id));
+    return button;
+  }));
+  if (!items.length) results.innerHTML = '<div class="command-palette-empty">没有匹配项</div>';
+}
+
+let commandPaletteTrigger = null;
+function openCommandPalette() {
+  const overlay = document.getElementById('commandPaletteOverlay');
+  const input = document.getElementById('commandPaletteInput');
+  commandPaletteTrigger = document.activeElement;
+  [...document.body.children].forEach(element => {
+    if (element !== overlay) element.inert = true;
+  });
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  input.value = '';
+  renderCommandPalette('');
+  requestAnimationFrame(() => input.focus());
+}
+
+function closeCommandPalette() {
+  const overlay = document.getElementById('commandPaletteOverlay');
+  if (!overlay?.classList.contains('visible')) return;
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  [...document.body.children].forEach(element => {
+    if (element !== overlay) element.inert = false;
+  });
+  if (commandPaletteTrigger?.focus) commandPaletteTrigger.focus();
+}
+
+function trapOverlayFocus(e, overlayId) {
+  if (e.key !== 'Tab') return false;
+  const overlay = document.getElementById(overlayId);
+  if (!overlay?.classList.contains('visible')) return false;
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => !element.hidden && element.getClientRects().length > 0);
+  if (!focusable.length) return false;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+    return true;
+  }
+  if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
+function trapCommandPaletteFocus(e) {
+  return trapOverlayFocus(e, 'commandPaletteOverlay');
+}
+
+function trapImportPreviewFocus(e) {
+  return trapOverlayFocus(e, 'importPreviewOverlay');
+}
+
+function trapMappingWizardFocus(e) {
+  return trapOverlayFocus(e, 'mappingWizardOverlay');
+}
+
+let pendingMappingWizard = null;
+let mappingWizardTrigger = null;
+
+function mappingSelectMarkup(field, columns, selected, kind) {
+  const options = ['<option value="">不映射</option>', ...columns.map(column =>
+    `<option value="${escapeHtml(column)}"${column === selected ? ' selected' : ''}>${escapeHtml(column)}</option>`)].join('');
+  return `<label class="mapping-field${field.required ? ' required' : ''}"><span>${escapeHtml(field.label)}</span><select data-mapping-kind="${kind}" data-mapping-field="${field.id}" onchange="updateMappingAutoLayoutDefault()">${options}</select></label>`;
+}
+
+function renderMappingFields(kind, columns, selected) {
+  const fields = kind === 'connection'
+    ? DiagramWeaveFieldMapping.CONNECTION_FIELDS
+    : DiagramWeaveFieldMapping.NODE_FIELDS;
+  const container = document.getElementById(kind === 'connection' ? 'connectionMappingFields' : 'nodeMappingFields');
+  container.innerHTML = fields.map(field => mappingSelectMarkup(field, columns, selected[field.id], kind)).join('');
+}
+
+function collectCurrentMapping(kind) {
+  return Object.fromEntries([...document.querySelectorAll(`[data-mapping-kind="${kind}"]`)]
+    .map(select => [select.dataset.mappingField, select.value]));
+}
+
+function updateMappingAutoLayoutDefault() {
+  const mapping = collectCurrentMapping('node');
+  document.getElementById('mappingAutoLayout').checked = !DiagramWeaveFieldMapping.hasCoordinateMapping(mapping);
+}
+
+function refreshMappingPresetSelect(selectedName = '') {
+  const select = document.getElementById('mappingPresetSelect');
+  let presets = [];
+  try { presets = DiagramWeaveFieldMapping.listPresets(); } catch { /* storage unavailable */ }
+  select.innerHTML = '<option value="">选择预设</option>' + presets.map(preset =>
+    `<option value="${escapeHtml(preset.name)}"${preset.name === selectedName ? ' selected' : ''}>${escapeHtml(preset.name)}</option>`).join('');
+}
+
+function startMappingWizard(options) {
+  const nodeRows = Array.isArray(options?.nodeRows) ? options.nodeRows : [];
+  const connectionRows = Array.isArray(options?.connectionRows) ? options.connectionRows : [];
+  const nodeColumns = DiagramWeaveFieldMapping.detectColumns(nodeRows);
+  const connectionColumns = DiagramWeaveFieldMapping.detectColumns(connectionRows);
+  const nodeMapping = options.nodeMapping || DiagramWeaveFieldMapping.suggestMapping(nodeColumns, 'node');
+  const connectionMapping = options.connectionMapping || DiagramWeaveFieldMapping.suggestMapping(connectionColumns, 'connection');
+  pendingMappingWizard = { ...options, nodeRows, connectionRows, nodeColumns, connectionColumns };
+  mappingWizardTrigger = document.activeElement;
+  renderMappingFields('node', nodeColumns, nodeMapping);
+  renderMappingFields('connection', connectionColumns, connectionMapping);
+  document.getElementById('mappingWizardSource').textContent = `${options.sourceName || '导入数据'} · 选择来源列，然后生成预览`;
+  document.getElementById('mappingValidation').textContent = '';
+  document.getElementById('mappingPresetName').value = '';
+  refreshMappingPresetSelect();
+  updateMappingAutoLayoutDefault();
+  const overlay = document.getElementById('mappingWizardOverlay');
+  [...document.body.children].forEach(element => { if (element !== overlay) element.inert = true; });
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => document.querySelector('#nodeMappingFields select')?.focus());
+}
+
+function cancelMappingWizard() {
+  const overlay = document.getElementById('mappingWizardOverlay');
+  if (!overlay?.classList.contains('visible')) return;
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  [...document.body.children].forEach(element => { if (element !== overlay) element.inert = false; });
+  pendingMappingWizard = null;
+  if (mappingWizardTrigger?.focus) mappingWizardTrigger.focus();
+}
+
+function saveCurrentMappingPreset() {
+  const name = document.getElementById('mappingPresetName').value.trim();
+  const validation = document.getElementById('mappingValidation');
+  if (!name) { validation.textContent = '请输入预设名称'; return; }
+  try {
+    DiagramWeaveFieldMapping.savePreset(name, {
+      node: collectCurrentMapping('node'), connection: collectCurrentMapping('connection'),
+    });
+    refreshMappingPresetSelect(name);
+    validation.textContent = '预设已保存到当前浏览器';
+  } catch (error) {
+    validation.textContent = error?.message || '预设保存失败';
+  }
+}
+
+function applyViewportTransform(transform) {
+  state.zoom = transform.zoom;
+  state.panX = transform.panX;
+  state.panY = transform.panY;
+  document.getElementById('zoom-level').textContent = Math.round(state.zoom * 100) + '%';
+  updateTransform();
+}
+
+function fitNodes(nodes) {
+  if (!nodes?.length || typeof DiagramWeaveCanvasTools === 'undefined') return false;
+  applyViewportTransform(DiagramWeaveCanvasTools.fitTransform(nodes, {
+    width: canvasWrapper.clientWidth, height: canvasWrapper.clientHeight,
+  }, 72));
+  return true;
+}
+
+function fitAllNodes() {
+  return fitNodes(state.nodes);
+}
+
+function fitSelectedNodes() {
+  const selected = new Set(getSelectedNodeIds());
+  return fitNodes(state.nodes.filter(node => selected.has(node.id)));
+}
+
+function centerNodeInCanvas(nodeId) {
+  const node = state.nodes.find(item => item.id === nodeId);
+  if (!node) return false;
+  state.panX = canvasWrapper.clientWidth / 2 - (node.x + node.w / 2) * state.zoom;
+  state.panY = canvasWrapper.clientHeight / 2 - (node.y + node.h / 2) * state.zoom;
+  updateTransform();
+  return true;
+}
+
+function toggleOutlinePanel(force) {
+  const panel = document.getElementById('outlinePanel');
+  const visible = typeof force === 'boolean' ? force : !panel.classList.contains('visible');
+  panel.classList.toggle('visible', visible);
+  if (visible) {
+    renderOutlinePanel();
+    document.getElementById('outlineSearch')?.focus();
+  }
+}
+
+function syncOutlineFilterOptions(nodes) {
+  const sync = (id, values, emptyLabel) => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const current = select.value;
+    select.innerHTML = `<option value="">${emptyLabel}</option>` + [...values].filter(Boolean).sort().map(value =>
+      `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('');
+    if ([...values].includes(current)) select.value = current;
+  };
+  sync('outlineRoleFilter', new Set(nodes.map(node => node.role)), '全部角色');
+  sync('outlineShapeFilter', new Set(nodes.map(node => node.shape)), '全部形状');
+}
+
+function renderOutlinePanel() {
+  const list = document.getElementById('outlineNodeList');
+  if (!list || typeof DiagramWeaveCanvasTools === 'undefined') return;
+  const pages = typeof DiagramWeave !== 'undefined' && DiagramWeave.doc?.pages?.length
+    ? DiagramWeave.doc.pages
+    : [{ id: 'page_1', name: 'Page 1', nodes: state.nodes }];
+  const allNodes = pages.flatMap(page => page.nodes || []);
+  syncOutlineFilterOptions(allNodes);
+  const query = document.getElementById('outlineSearch')?.value || '';
+  const filters = {
+    role: document.getElementById('outlineRoleFilter')?.value || '',
+    shape: document.getElementById('outlineShapeFilter')?.value || '',
+  };
+  const fragment = document.createDocumentFragment();
+  pages.forEach(page => {
+    const nodes = DiagramWeaveCanvasTools.filterNodes(page.nodes || [], query, filters);
+    if (!nodes.length) return;
+    const label = document.createElement('div');
+    label.className = 'outline-page-label';
+    label.textContent = page.name;
+    fragment.appendChild(label);
+    nodes.forEach(node => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `outline-node${getSelectedNodeIds().includes(node.id) ? ' selected' : ''}`;
+      button.innerHTML = `<span>${escapeHtml(node.label || node.id)}</span><small>${escapeHtml(node.role || node.shape || '')}</small>`;
+      button.addEventListener('click', () => focusOutlineNode(page.id, node.id));
+      fragment.appendChild(button);
+    });
+  });
+  if (!fragment.childNodes.length) list.innerHTML = '<div class="outline-empty">没有匹配节点</div>';
+  else list.replaceChildren(fragment);
+}
+
+function focusOutlineNode(pageId, nodeId) {
+  if (typeof DiagramWeave !== 'undefined' && DiagramWeave.doc.currentPageId !== pageId) DiagramWeave.switchPage(pageId);
+  selectNode(nodeId);
+  centerNodeInCanvas(nodeId);
+  renderOutlinePanel();
+}
+
+function renderCanvasMinimap() {
+  const minimap = document.getElementById('canvasMinimap');
+  if (!minimap || typeof DiagramWeaveCanvasTools === 'undefined') return;
+  const ctx = minimap.getContext('2d');
+  const width = minimap.width;
+  const height = minimap.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = getThemeVar('--bg-surface', '#1b1d27');
+  ctx.fillRect(0, 0, width, height);
+  const box = DiagramWeaveCanvasTools.bounds(state.nodes);
+  if (!box) return;
+  const padding = 10;
+  const scale = Math.min((width - padding * 2) / Math.max(1, box.width), (height - padding * 2) / Math.max(1, box.height));
+  const offsetX = (width - box.width * scale) / 2 - box.minX * scale;
+  const offsetY = (height - box.height * scale) / 2 - box.minY * scale;
+  minimap.dataset.scale = String(scale);
+  minimap.dataset.offsetX = String(offsetX);
+  minimap.dataset.offsetY = String(offsetY);
+  const selected = new Set(getSelectedNodeIds());
+  state.nodes.forEach(node => {
+    ctx.fillStyle = selected.has(node.id) ? getThemeVar('--accent', '#8b7fff') : getThemeVar('--text-muted', '#858aa8');
+    ctx.fillRect(node.x * scale + offsetX, node.y * scale + offsetY, Math.max(2, node.w * scale), Math.max(2, node.h * scale));
+  });
+  const worldX = -state.panX / state.zoom;
+  const worldY = -state.panY / state.zoom;
+  ctx.strokeStyle = getThemeVar('--accent-secondary', '#38bdf8');
+  ctx.lineWidth = 2;
+  ctx.strokeRect(worldX * scale + offsetX, worldY * scale + offsetY,
+    canvasWrapper.clientWidth / state.zoom * scale, canvasWrapper.clientHeight / state.zoom * scale);
+}
+
+function handleMinimapClick(event) {
+  const minimap = event.currentTarget;
+  const rect = minimap.getBoundingClientRect();
+  const scale = Number(minimap.dataset.scale);
+  if (!scale) return;
+  const x = (event.clientX - rect.left) * (minimap.width / rect.width);
+  const y = (event.clientY - rect.top) * (minimap.height / rect.height);
+  const worldX = (x - Number(minimap.dataset.offsetX)) / scale;
+  const worldY = (y - Number(minimap.dataset.offsetY)) / scale;
+  state.panX = canvasWrapper.clientWidth / 2 - worldX * state.zoom;
+  state.panY = canvasWrapper.clientHeight / 2 - worldY * state.zoom;
+  updateTransform();
+}
+
+function selectedNodesForLayout() {
+  const selected = new Set(getSelectedNodeIds());
+  return state.nodes.filter(node => selected.has(node.id));
+}
+
+function applyNodePositionPatches(patches) {
+  if (!patches.length) return false;
   saveState();
-  node.role = val.trim();
-  syncFlowTableRowFromNode(node);
+  const byId = new Map(patches.map(patch => [patch.id, patch]));
+  state.nodes.forEach(node => {
+    const patch = byId.get(node.id);
+    if (patch) { node.x = patch.x; node.y = patch.y; }
+  });
+  renderAll();
+  return true;
+}
+
+function runAlignCommand(mode) {
+  if (!mode) return false;
+  return applyNodePositionPatches(DiagramWeaveCanvasTools.align(selectedNodesForLayout(), mode));
+}
+
+function runDistributeCommand(axis) {
+  if (!axis) return false;
+  return applyNodePositionPatches(DiagramWeaveCanvasTools.distribute(selectedNodesForLayout(), axis));
+}
+
+function initCanvasNavigation() {
+  document.getElementById('canvasMinimap')?.addEventListener('click', handleMinimapClick);
+  renderOutlinePanel();
+  renderCanvasMinimap();
+}
+
+function loadSelectedMappingPreset(name) {
+  if (!name || !pendingMappingWizard) return;
+  const preset = DiagramWeaveFieldMapping.loadPreset(name);
+  if (!preset) return;
+  renderMappingFields('node', pendingMappingWizard.nodeColumns, preset.node || {});
+  renderMappingFields('connection', pendingMappingWizard.connectionColumns, preset.connection || {});
+  document.getElementById('mappingPresetName').value = preset.name;
+  updateMappingAutoLayoutDefault();
+}
+
+function continueMappingToPreview() {
+  if (!pendingMappingWizard) return false;
+  const nodeMapping = collectCurrentMapping('node');
+  const connectionMapping = collectCurrentMapping('connection');
+  const nodeResult = DiagramWeaveFieldMapping.mapRows(pendingMappingWizard.nodeRows, nodeMapping, 'node');
+  const connectionResult = DiagramWeaveFieldMapping.mapRows(pendingMappingWizard.connectionRows, connectionMapping, 'connection');
+  const mappingIssues = [...nodeResult.issues, ...(pendingMappingWizard.connectionRows.length ? connectionResult.issues : [])];
+  if (mappingIssues.length) {
+    document.getElementById('mappingValidation').textContent = mappingIssues.map(item => item.reason).join('；');
+    return false;
+  }
+  const autoLayout = document.getElementById('mappingAutoLayout').checked;
+  const sourceName = pendingMappingWizard.sourceName || '映射数据';
+  const preview = DiagramWeaveExtensionKernel.invokeExtension('import.preview.tabular', {
+    nodes: nodeResult.rows, connections: connectionResult.rows, sourceType: pendingMappingWizard.sourceType || 'excel',
+  });
+  const applyHook = pendingMappingWizard.onApply;
+  cancelMappingWizard();
+  showImportPreview(preview, {
+    sourceName,
+    apply: document => {
+      const loaded = applyHook ? applyHook(document) : loadFlowDocumentPayload(document);
+      if (loaded !== false && autoLayout && state.nodes.length > 1) autoLayoutNodes('TB', 'normal');
+      return loaded;
+    },
+  });
+  return true;
+}
+
+async function runPaletteItem(kind, id) {
+  if (kind === 'command') await DiagramWeave.commands.executeCommand(id, getCommandContext());
+  if (kind === 'page') DiagramWeave.switchPage(id);
+  if (kind === 'node') {
+    selectNode(id);
+    const node = state.nodes.find(item => item.id === id);
+    if (node) {
+      state.panX = canvasWrapper.clientWidth / 2 - (node.x + node.w / 2) * state.zoom;
+      state.panY = canvasWrapper.clientHeight / 2 - (node.y + node.h / 2) * state.zoom;
+      updateTransform();
+    }
+  }
+  if (kind === 'template') applyTemplate(Number(id));
+  closeCommandPalette();
+}
+
+function filterShapeLibrary(query) {
+  const matches = new Set(shapeLibraryRegistry
+    ? shapeLibraryRegistry.search(query).map(entry => entry.id)
+    : []);
+  const needle = String(query || '').trim();
+  document.querySelectorAll('.shape-item').forEach(item => {
+    item.hidden = Boolean(needle) && !matches.has(item.dataset.shape);
+  });
+  document.querySelectorAll('.sidebar-section').forEach(section => {
+    const items = [...section.querySelectorAll('.shape-item')];
+    if (items.length) section.hidden = Boolean(needle) && items.every(item => item.hidden);
+  });
+}
+
+function renderShapePreferenceState() {
+  if (!shapeLibraryPreferences) return;
+  const favorites = new Set(shapeLibraryPreferences.favorites());
+  document.querySelectorAll('.shape-item').forEach(item => {
+    const active = favorites.has(item.dataset.shape);
+    item.classList.toggle('favorite', active);
+    const button = item.querySelector('.shape-favorite-btn');
+    if (button) { button.textContent = active ? '★' : '☆'; button.setAttribute('aria-pressed', String(active)); }
+  });
+  renderShapeQuickList('shapeFavorites', shapeLibraryPreferences.favorites());
+  renderShapeQuickList('shapeRecent', shapeLibraryPreferences.recent());
+}
+
+function renderShapeQuickList(id, ids) {
+  const list = document.getElementById(id);
+  if (!list || !shapeLibraryRegistry) return;
+  list.replaceChildren(...ids.map(shapeId => shapeLibraryRegistry.get(shapeId)).filter(Boolean).map(entry => {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'shape-quick-item'; button.textContent = entry.label;
+    button.addEventListener('click', () => insertShapeFromLibrary(document.querySelector(`.shape-item[data-shape="${CSS.escape(entry.id)}"]`)));
+    return button;
+  }));
+  list.parentElement.hidden = !list.childElementCount;
+}
+
+function toggleShapeFavorite(shapeId) {
+  shapeLibraryPreferences?.toggleFavorite(shapeId);
+  renderShapePreferenceState();
+}
+
+function recordRecentShape(shapeId) {
+  shapeLibraryPreferences?.recordRecent(shapeId);
+  renderShapePreferenceState();
+}
+
+function initShapeLibraryWorkflow() {
+  if (typeof DiagramWeaveShapeLibrary === 'undefined') return;
+  shapeLibraryRegistry = DiagramWeaveShapeLibrary.createRegistry();
+  shapeLibraryPreferences = DiagramWeaveShapeLibrary.createPreferences(localStorage);
+  const sidebar = document.querySelector('.sidebar');
+  const firstSection = sidebar?.querySelector('.sidebar-section');
+  ['Favorites', 'Recent'].forEach(name => {
+    const section = document.createElement('div');
+    section.className = 'sidebar-section shape-quick-section'; section.hidden = true;
+    section.innerHTML = `<div class="sidebar-section-title">${name}</div><div class="shape-quick-list" id="shape${name}"></div>`;
+    sidebar?.insertBefore(section, firstSection);
+  });
+  document.querySelectorAll('.sidebar-section').forEach((section, index) => {
+    const title = section.querySelector('.sidebar-section-title');
+    const grid = section.querySelector('.shape-grid');
+    if (!title || !grid) return;
+    const category = title.textContent.trim() || `Category ${index + 1}`;
+    title.tabIndex = 0; title.setAttribute('role', 'button'); title.setAttribute('aria-expanded', 'true');
+    const toggle = () => { const collapsed = section.classList.toggle('collapsed'); title.setAttribute('aria-expanded', String(!collapsed)); };
+    title.addEventListener('click', toggle);
+    title.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); } });
+    section.querySelectorAll('.shape-item').forEach(item => {
+      shapeLibraryRegistry.register({ id: item.dataset.shape, label: item.dataset.label, category,
+        packId: section.id === 'remoteShapesSection' ? 'remote' : 'builtin', keywords: [item.dataset.shape, item.dataset.label] });
+      bindShapeItemElement(item);
+    });
+  });
+  window.DiagramWeave = window.DiagramWeave || {};
+  DiagramWeave.shapePacks = shapeLibraryRegistry;
+  renderShapePreferenceState();
+}
+
+function refreshStencilPackShapes() {
+  if (!stencilPackStore || !shapeLibraryRegistry) return;
+  const grid = document.getElementById('remoteShapesGrid');
+  grid?.querySelectorAll('.shape-item[data-pack-id]').forEach(item => {
+    if (item.dataset.packId !== 'remote') item.remove();
+  });
+  stencilPackStore.list().forEach(pack => {
+    shapeLibraryRegistry.unregisterPack(pack.id);
+    if (pack.enabled) pack.shapes.forEach(shape => registerRemoteShape({ ...shape, packId: pack.id }));
+  });
+  const section = document.getElementById('remoteShapesSection');
+  if (section) section.style.display = grid?.childElementCount ? '' : 'none';
+  renderShapePreferenceState();
+}
+
+function initStencilManager() {
+  if (typeof DiagramWeaveStencilManager === 'undefined' || typeof DiagramWeaveContent === 'undefined') return;
+  stencilPackStore = DiagramWeaveStencilManager.createStore(localStorage, DiagramWeaveContent.validatePack);
+  refreshStencilPackShapes();
+  window.DiagramWeave = window.DiagramWeave || {};
+  DiagramWeave.stencilPacks = stencilPackStore;
+}
+
+function renderStencilManager() {
+  const list = document.getElementById('stencilPackList');
+  if (!list || !stencilPackStore) return;
+  const packs = stencilPackStore.list();
+  list.replaceChildren(...packs.map(pack => {
+    const row = document.createElement('div'); row.className = 'stencil-pack-row'; row.dataset.packId = pack.id;
+    const toggle = document.createElement('input'); toggle.type = 'checkbox'; toggle.checked = pack.enabled;
+    toggle.setAttribute('aria-label', `Enable ${pack.name}`);
+    toggle.addEventListener('change', () => { stencilPackStore.setEnabled(pack.id, toggle.checked); refreshStencilPackShapes(); renderStencilManager(); });
+    const details = document.createElement('div');
+    const name = document.createElement('input'); name.type = 'text'; name.value = pack.name; name.maxLength = 60; name.setAttribute('aria-label', 'Pack name');
+    name.addEventListener('change', () => { stencilPackStore.rename(pack.id, name.value); });
+    const meta = document.createElement('div'); meta.className = 'stencil-pack-meta'; meta.textContent = `${pack.id} · ${pack.shapes.length} shapes · v${pack.version}`;
+    details.append(name, meta);
+    const exportButton = document.createElement('button'); exportButton.type = 'button'; exportButton.textContent = 'Export'; exportButton.addEventListener('click', () => exportStencilPack(pack.id));
+    const removeButton = document.createElement('button'); removeButton.type = 'button'; removeButton.textContent = 'Remove'; removeButton.addEventListener('click', () => { stencilPackStore.remove(pack.id); refreshStencilPackShapes(); renderStencilManager(); });
+    row.append(toggle, details, exportButton, removeButton); return row;
+  }));
+  if (!packs.length) { const empty = document.createElement('p'); empty.className = 'settings-hint'; empty.textContent = 'No local stencil packs.'; list.append(empty); }
+}
+
+function showStencilManager() {
+  if (!stencilPackStore) initStencilManager();
+  document.getElementById('stencilPackIssues').textContent = '';
+  renderStencilManager();
+  const overlay = document.getElementById('stencilManagerOverlay');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+}
+
+function hideStencilManager() {
+  const overlay = document.getElementById('stencilManagerOverlay');
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+async function handleStencilPackImport(event) {
+  const file = event.target.files?.[0]; event.target.value = '';
+  if (!file || !stencilPackStore) return;
+  let raw;
+  try { raw = JSON.parse(await file.text()); } catch { raw = null; }
+  const result = stencilPackStore.importPack(raw);
+  const issues = document.getElementById('stencilPackIssues');
+  if (!result.success) { issues.textContent = result.issues.join('\n'); return; }
+  issues.textContent = '';
+  refreshStencilPackShapes(); renderStencilManager();
+}
+
+function exportStencilPack(id) {
+  const json = stencilPackStore?.exportPack(id); if (!json) return;
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = `${id}.stencil.json`; link.click(); URL.revokeObjectURL(url);
+}
+
+function renderRoutingRulesPanel() {
+  if (typeof DiagramWeaveRoutingRules === 'undefined') return;
+  state.routingRules = DiagramWeaveRoutingRules.normalizeRules(state.routingRules);
+  document.getElementById('routingEndpointLock').checked = state.routingRules.endpointLock;
+  document.getElementById('routingObstaclePadding').value = state.routingRules.obstaclePadding;
+  document.getElementById('routingBridgeBehavior').value = state.routingRules.bridgeBehavior;
+  document.getElementById('routingBridgeSize').value = state.routingRules.bridgeSize;
+  document.getElementById('routingDefaultLabel').value = state.routingRules.defaultLabelPlacement;
+  const conn = state.connections.find(item => item.id === state.selectedConnectionId);
+  document.getElementById('routingNoConnection').hidden = Boolean(conn);
+  const controls = document.getElementById('routingConnectionControls'); controls.hidden = !conn;
+  if (!conn) return;
+  Object.assign(conn, DiagramWeaveRoutingRules.normalizeConnectionRouting(conn, state.routingRules.defaultLabelPlacement));
+  document.getElementById('routingConnLabel').value = conn.labelPlacement;
+  document.getElementById('routingLabelOffsetX').value = conn.labelOffset?.x || 0;
+  document.getElementById('routingLabelOffsetY').value = conn.labelOffset?.y ?? -12;
+  const list = document.getElementById('routingWaypointList');
+  list.replaceChildren(...conn.waypoints.map((point, index) => {
+    const row = document.createElement('div'); row.className = 'routing-waypoint-row';
+    const x = document.createElement('label'); x.textContent = `X ${index + 1}`; const xi = document.createElement('input'); xi.type = 'number'; xi.value = point.x; xi.disabled = point.locked; xi.addEventListener('change', () => moveSelectedConnectionWaypoint(index, 'x', xi.value)); x.append(xi);
+    const y = document.createElement('label'); y.textContent = `Y ${index + 1}`; const yi = document.createElement('input'); yi.type = 'number'; yi.value = point.y; yi.disabled = point.locked; yi.addEventListener('change', () => moveSelectedConnectionWaypoint(index, 'y', yi.value)); y.append(yi);
+    const lock = document.createElement('label'); lock.textContent = 'Lock'; const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = point.locked; checkbox.addEventListener('change', () => lockSelectedConnectionWaypoint(index, checkbox.checked)); lock.append(checkbox);
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Remove'; remove.addEventListener('click', () => removeSelectedConnectionWaypoint(index));
+    row.append(x, y, lock, remove); return row;
+  }));
+}
+
+function showRoutingRulesPanel() {
+  renderRoutingRulesPanel(); const overlay = document.getElementById('routingRulesOverlay'); overlay.setAttribute('aria-hidden', 'false'); overlay.classList.add('visible');
+}
+function hideRoutingRulesPanel() { const overlay = document.getElementById('routingRulesOverlay'); overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+function updateRoutingRulesFromPanel() {
+  saveState(); state.routingRules = DiagramWeaveRoutingRules.normalizeRules({
+    endpointLock: document.getElementById('routingEndpointLock').checked,
+    obstaclePadding: document.getElementById('routingObstaclePadding').value,
+    bridgeBehavior: document.getElementById('routingBridgeBehavior').value,
+    bridgeSize: document.getElementById('routingBridgeSize').value,
+    defaultLabelPlacement: document.getElementById('routingDefaultLabel').value,
+  }); renderConnections();
+}
+function updateSelectedConnectionRouting() {
+  const conn = state.connections.find(item => item.id === state.selectedConnectionId); if (!conn) return;
+  saveState(); conn.labelPlacement = document.getElementById('routingConnLabel').value;
+  conn.labelOffset = { x: Number(document.getElementById('routingLabelOffsetX').value) || 0, y: Number(document.getElementById('routingLabelOffsetY').value) || 0 };
+  Object.assign(conn, DiagramWeaveRoutingRules.normalizeConnectionRouting(conn, state.routingRules.defaultLabelPlacement)); renderConnections();
+}
+function addSelectedConnectionWaypoint() {
+  const conn = state.connections.find(item => item.id === state.selectedConnectionId); if (!conn) return;
+  const fromNode = state.nodes.find(node => node.id === conn.from); const toNode = state.nodes.find(node => node.id === conn.to); if (!fromNode || !toNode) return;
+  saveState(); conn.waypoints ||= []; conn.waypoints.push({ x: (fromNode.x + fromNode.w / 2 + toNode.x + toNode.w / 2) / 2, y: (fromNode.y + fromNode.h / 2 + toNode.y + toNode.h / 2) / 2, locked: false });
+  renderConnections(); renderRoutingRulesPanel();
+}
+function moveSelectedConnectionWaypoint(index, axis, value) { const conn = state.connections.find(item => item.id === state.selectedConnectionId); const point = conn?.waypoints?.[index]; if (!point || point.locked) return; saveState(); point[axis] = Number(value) || 0; renderConnections(); }
+function lockSelectedConnectionWaypoint(index, locked) { const conn = state.connections.find(item => item.id === state.selectedConnectionId); const point = conn?.waypoints?.[index]; if (!point) return; saveState(); point.locked = Boolean(locked); renderConnections(); renderRoutingRulesPanel(); }
+function removeSelectedConnectionWaypoint(index) { const conn = state.connections.find(item => item.id === state.selectedConnectionId); if (!conn?.waypoints?.[index]) return; saveState(); conn.waypoints.splice(index, 1); renderConnections(); renderRoutingRulesPanel(); }
+
+function initVersionHistory() {
+  if (typeof DiagramWeaveHistory === 'undefined') return;
+  versionHistoryStore = DiagramWeaveHistory.createIndexedDbStore(window.indexedDB, { limit: 50, maxBytes: 20 * 1024 * 1024 });
+  window.DiagramWeave = window.DiagramWeave || {};
+  DiagramWeave.history = versionHistoryStore;
+}
+
+async function captureVersionSnapshot(operation = 'Edit', force = false) {
+  if (!versionHistoryStore || typeof DiagramWeave === 'undefined') return null;
+  const document = getFlowDocumentPayload();
+  delete document.versionHistory;
+  const fingerprint = JSON.stringify({ pages: document.pages, currentPageId: document.currentPageId, routingRules: document.routingRules });
+  if (!force && fingerprint === lastHistoryFingerprint) return null;
+  lastHistoryFingerprint = fingerprint;
+  return versionHistoryStore.addSnapshot(projectSession.historyId, operation, document);
+}
+
+async function renderVersionHistory() {
+  const list = document.getElementById('versionHistoryList'); if (!list || !versionHistoryStore) return;
+  const rows = await versionHistoryStore.list(projectSession.historyId);
+  list.replaceChildren(...rows.map(row => {
+    const item = document.createElement('div'); item.className = 'version-history-row'; item.dataset.snapshotId = row.id;
+    const detail = document.createElement('div'); const title = document.createElement('strong'); title.textContent = row.operation;
+    const meta = document.createElement('div'); meta.className = 'version-history-meta'; meta.textContent = `${new Date(row.createdAt).toLocaleString()} · ${Math.max(1, Math.round(row.bytes / 1024))} KB`; detail.append(title, meta);
+    const restore = document.createElement('button'); restore.type = 'button'; restore.textContent = 'Restore'; restore.addEventListener('click', () => restoreVersionSnapshot(row.id));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Delete'; remove.addEventListener('click', async () => { await versionHistoryStore.delete(row.id); await renderVersionHistory(); });
+    item.append(detail, restore, remove); return item;
+  }));
+  if (!rows.length) { const empty = document.createElement('p'); empty.className = 'settings-hint'; empty.textContent = 'No local snapshots.'; list.append(empty); }
+}
+
+async function showVersionHistory() {
+  if (!versionHistoryStore) initVersionHistory(); await renderVersionHistory();
+  const overlay = document.getElementById('versionHistoryOverlay'); overlay.setAttribute('aria-hidden', 'false'); overlay.classList.add('visible');
+}
+function hideVersionHistory() { const overlay = document.getElementById('versionHistoryOverlay'); overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+async function createNamedVersionSnapshot() { await captureVersionSnapshot('Manual snapshot', true); await renderVersionHistory(); }
+async function restoreVersionSnapshot(id) {
+  const row = await versionHistoryStore?.get(id); if (!row) return false;
+  await captureVersionSnapshot('Before restore', true);
+  const restored = loadFlowDocumentPayload(row.document); if (restored) { hideVersionHistory(); showToast('Version restored'); }
+  return restored;
+}
+async function clearVersionHistory() { await versionHistoryStore?.clear(projectSession.historyId); lastHistoryFingerprint = ''; await renderVersionHistory(); }
+
+let currentQualityIssues = [];
+function getQualityDocument() { return getFlowDocumentPayload(); }
+function renderQualityChecker() {
+  const list = document.getElementById('qualityCheckerList'); const summary = document.getElementById('qualityCheckerSummary');
+  if (!list || typeof DiagramWeaveContracts === 'undefined') return;
+  currentQualityIssues = DiagramWeaveContracts.inspectQuality(getQualityDocument());
+  const locale = typeof DiagramWeaveI18n !== 'undefined' ? DiagramWeaveI18n.getLocale() : 'en';
+  const language = locale.startsWith('zh') ? 'zh' : 'en';
+  const counts = currentQualityIssues.reduce((result, issue) => { result[issue.severity] = (result[issue.severity] || 0) + 1; return result; }, {});
+  summary.textContent = `${currentQualityIssues.length} issues · ${counts.error || 0} errors · ${counts.warning || 0} warnings · ${counts.info || 0} info`;
+  list.replaceChildren(...currentQualityIssues.map((issue, index) => {
+    const row = document.createElement('div'); row.className = 'quality-issue-row'; row.dataset.issueIndex = index;
+    const severity = document.createElement('span'); severity.className = `quality-severity ${issue.severity}`; severity.textContent = issue.severity;
+    const message = document.createElement('div'); const title = document.createElement('strong'); title.textContent = issue.message?.[language] || issue.message?.en || issue.rule;
+    const meta = document.createElement('div'); meta.className = 'version-history-meta'; meta.textContent = `${issue.rule} · ${issue.targetType}:${issue.targetId}`; message.append(title, meta);
+    const locate = document.createElement('button'); locate.type = 'button'; locate.textContent = 'Locate'; locate.addEventListener('click', () => locateQualityIssue(index));
+    row.append(severity, message, locate);
+    if (issue.fix && issue.fix.destructive === false) { const fix = document.createElement('button'); fix.type = 'button'; fix.textContent = 'Fix'; fix.addEventListener('click', () => applyQualityIssueFix(index)); row.append(fix); }
+    return row;
+  }));
+  if (!currentQualityIssues.length) { const ok = document.createElement('p'); ok.className = 'settings-hint'; ok.textContent = 'No quality issues found.'; list.append(ok); }
+}
+function showQualityChecker() { renderQualityChecker(); const overlay = document.getElementById('qualityCheckerOverlay'); overlay.setAttribute('aria-hidden', 'false'); overlay.classList.add('visible'); }
+function hideQualityChecker() { const overlay = document.getElementById('qualityCheckerOverlay'); overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+function locateQualityIssue(index) {
+  const issue = currentQualityIssues[index]; if (!issue || typeof DiagramWeave === 'undefined') return;
+  const page = DiagramWeave.doc.pages.find(item => issue.targetType === 'node' ? item.nodes.some(node => node.id === issue.targetId) : item.connections.some(connection => connection.id === issue.targetId));
+  if (page && page.id !== DiagramWeave.doc.currentPageId) DiagramWeave.switchPage(page.id);
+  hideQualityChecker(); if (issue.targetType === 'node') selectNode(issue.targetId); else selectConnection(issue.targetId);
+}
+function applyQualityIssueFix(index) {
+  const issue = currentQualityIssues[index]; if (!issue?.fix || issue.fix.destructive !== false) return false;
+  if (issue.fix.id === 'assign-default-label' && issue.targetType === 'node') {
+    const page = DiagramWeave.doc.pages.find(item => item.nodes.some(node => node.id === issue.targetId)); const node = page?.nodes.find(item => item.id === issue.targetId); if (!node) return false;
+    saveState(); node.label = node.shape || 'Process'; if (page.id === DiagramWeave.doc.currentPageId) { state.nodes = page.nodes; clearCanvasNodes(); renderAll(); }
+    renderQualityChecker(); return true;
+  }
+  return false;
+}
+
+let currentProcessAnalysis = null;
+function analysisNodeButton(pageId, nodeId) {
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'analysis-node-link'; button.textContent = nodeId;
+  button.addEventListener('click', () => locateAnalysisNode(pageId, nodeId)); return button;
+}
+function analysisMetric(label, value) {
+  const item = document.createElement('div'); item.className = 'analysis-metric';
+  const title = document.createElement('strong'); title.textContent = label; const content = document.createElement('span'); content.textContent = value;
+  item.append(title, content); return item;
+}
+function renderProcessAnalysis() {
+  const list = document.getElementById('processAnalysisList'); const summary = document.getElementById('processAnalysisSummary');
+  if (!list || typeof DiagramWeaveProcessAnalysis === 'undefined') return;
+  currentProcessAnalysis = DiagramWeaveProcessAnalysis.analyzeProcess(getQualityDocument());
+  const total = currentProcessAnalysis.summary;
+  summary.textContent = `${total.pageCount} pages · ${total.unreachableCount} unreachable · ${total.bottleneckCount} bottlenecks · ${total.cycleCount} cycles · ${total.slaRiskCount} SLA risks`;
+  list.replaceChildren(...currentProcessAnalysis.pages.map(page => {
+    const section = document.createElement('section'); section.className = 'process-analysis-page';
+    const heading = document.createElement('h3'); heading.textContent = page.pageName || page.pageId || 'Page';
+    const metrics = document.createElement('div'); metrics.className = 'analysis-metrics';
+    metrics.append(
+      analysisMetric('Critical path / 关键路径', page.criticalPath.length ? `${page.criticalPath.join(' → ')} (${page.criticalDuration}d)` : 'None / 无'),
+      analysisMetric('Unreachable / 不可达', page.unreachable.length ? page.unreachable.join(', ') : '0'),
+      analysisMetric('Bottlenecks / 瓶颈', page.bottlenecks.length ? page.bottlenecks.map(row => row.nodeId).join(', ') : '0'),
+      analysisMetric('Longest wait / 最长等待', page.longestWait ? `${page.longestWait.nodeId}: ${page.longestWait.days}d` : 'Not configured / 未配置'),
+      analysisMetric('Cycles / 循环', page.cycles.length ? page.cycles.map(group => group.join(' → ')).join('; ') : '0'),
+      analysisMetric('SLA', !page.sla.configured ? 'Not configured / 未配置' : page.sla.risk ? `Risk / 风险 (+${page.sla.overBy}d)` : `Within ${page.sla.days}d / 达标`),
+      analysisMetric('Role load / 角色负荷', page.roleLoad.length ? page.roleLoad.map(row => `${row.role}: ${row.nodeCount} / ${row.duration}d`).join('; ') : 'None / 无')
+    );
+    const targets = document.createElement('div'); targets.className = 'version-history-meta'; targets.append('Targets / 目标: ');
+    [...new Set([...page.criticalPath, ...page.unreachable, ...page.bottlenecks.map(row => row.nodeId)])].forEach(id => targets.append(analysisNodeButton(page.pageId, id)));
+    section.append(heading, metrics, targets); return section;
+  }));
+}
+function showProcessAnalysis() { renderProcessAnalysis(); const overlay = document.getElementById('processAnalysisOverlay'); overlay.setAttribute('aria-hidden', 'false'); overlay.classList.add('visible'); overlay.querySelector('.dialog-close-btn')?.focus(); }
+function hideProcessAnalysis() { const overlay = document.getElementById('processAnalysisOverlay'); overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+function locateAnalysisNode(pageId, nodeId) {
+  if (typeof DiagramWeave === 'undefined') return;
+  if (pageId && pageId !== DiagramWeave.doc.currentPageId) DiagramWeave.switchPage(pageId);
+  hideProcessAnalysis(); selectNode(nodeId);
+}
+
+function getReviewThreads() {
+  if (typeof DiagramWeave === 'undefined') return [];
+  if (!Array.isArray(DiagramWeave.doc.reviewThreads)) DiagramWeave.doc.reviewThreads = [];
+  return DiagramWeave.doc.reviewThreads;
+}
+function selectedReviewTarget() {
+  if (state.selectedNodeId) return { targetType: 'node', targetId: state.selectedNodeId };
+  if (state.selectedConnectionId) return { targetType: 'connection', targetId: state.selectedConnectionId };
+  return null;
+}
+function findReviewTarget(thread) {
+  for (const page of DiagramWeave.doc.pages || []) {
+    const exists = thread.targetType === 'connection' ? (page.connections || []).some(item => item.id === thread.targetId) : (page.nodes || []).some(item => item.id === thread.targetId);
+    if (exists) return page;
+  }
+  return null;
+}
+function reviewStatusLabel(status) {
+  return ({ pending: 'Pending / 待确认', approved: 'Approved / 已批准', changes_requested: 'Changes requested / 需修改', resolved: 'Resolved / 已解决' })[status] || status;
+}
+function renderReviewPanel() {
+  const list = document.getElementById('reviewList'); const summary = document.getElementById('reviewTargetSummary'); const composer = document.getElementById('reviewComposer');
+  if (!list || typeof DiagramWeaveContracts === 'undefined') return;
+  const target = selectedReviewTarget(); summary.textContent = target ? `Selected ${target.targetType}: ${target.targetId}` : 'Select a node or connection to create a thread. / 请选择节点或连线';
+  composer?.querySelector('button')?.toggleAttribute('disabled', !target);
+  const threads = getReviewThreads(); list.replaceChildren(...threads.map(thread => {
+    const section = document.createElement('section'); section.className = 'review-thread'; section.dataset.threadId = thread.id;
+    const head = document.createElement('div'); head.className = 'review-thread-head'; const title = document.createElement('strong'); title.textContent = `${thread.targetType}:${thread.targetId}`;
+    const status = document.createElement('select'); status.setAttribute('aria-label', `Review status for ${thread.targetId}`);
+    DiagramWeaveContracts.REVIEW_STATUSES.forEach(value => { const option = document.createElement('option'); option.value = value; option.textContent = reviewStatusLabel(value); status.append(option); }); status.value = thread.status;
+    if (isMobileViewMode()) status.disabled = true; else status.addEventListener('change', () => updateReviewThreadStatus(thread.id, status.value));
+    const locate = document.createElement('button'); locate.type = 'button'; locate.textContent = findReviewTarget(thread) ? 'Locate / 定位' : 'Missing target / 目标缺失'; locate.disabled = !findReviewTarget(thread); locate.addEventListener('click', () => locateReviewThread(thread.id));
+    head.append(title, status, locate); section.append(head);
+    (thread.comments || []).forEach(comment => { const row = document.createElement('div'); row.className = 'review-comment'; const meta = document.createElement('div'); meta.className = 'review-comment-meta'; meta.textContent = `${comment.author || 'Anonymous'} · ${comment.createdAt || ''}`; const body = document.createElement('div'); body.textContent = comment.body; row.append(meta, body); section.append(row); });
+    const form = document.createElement('form'); form.className = 'review-comment-form'; const body = document.createElement('textarea'); body.maxLength = 5000; body.required = true; body.placeholder = 'Reply / 回复'; body.setAttribute('aria-label', `Reply to ${thread.targetId}`); const add = document.createElement('button'); add.type = 'submit'; add.textContent = 'Add / 添加'; form.append(body, add); form.addEventListener('submit', event => { event.preventDefault(); appendReviewComment(thread.id, body.value); }); section.append(form);
+    return section;
+  }));
+  if (!threads.length) { const empty = document.createElement('p'); empty.className = 'settings-hint'; empty.textContent = 'No review threads. / 暂无审阅线程'; list.append(empty); }
+}
+function showReviewPanel() { renderReviewPanel(); const overlay = document.getElementById('reviewOverlay'); overlay.setAttribute('aria-hidden', 'false'); overlay.classList.add('visible'); overlay.querySelector('.dialog-close-btn')?.focus(); }
+function hideReviewPanel() { const overlay = document.getElementById('reviewOverlay'); overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+function createSelectedReviewThread(event) {
+  event?.preventDefault(); if (isMobileViewMode()) return false; const target = selectedReviewTarget(); const body = document.getElementById('reviewBody')?.value || ''; if (!target || !body.trim()) return false;
+  let thread = DiagramWeaveContracts.createReviewThread({ ...target, id: `review_${Date.now()}_${getReviewThreads().length + 1}` });
+  thread = DiagramWeaveContracts.addReviewComment(thread, { author: document.getElementById('reviewAuthor')?.value || '', body }); getReviewThreads().push(thread);
+  document.getElementById('reviewBody').value = ''; void captureVersionSnapshot('Review comment', true); renderReviewPanel(); return true;
+}
+function appendReviewComment(threadId, body) {
+  if (isMobileViewMode()) return false; const threads = getReviewThreads(); const index = threads.findIndex(thread => thread.id === threadId); if (index < 0) return false;
+  try { threads[index] = DiagramWeaveContracts.addReviewComment(threads[index], { author: document.getElementById('reviewAuthor')?.value || '', body }); } catch { return false; }
+  void captureVersionSnapshot('Review comment', true); renderReviewPanel(); return true;
+}
+function updateReviewThreadStatus(threadId, status) {
+  if (isMobileViewMode()) return false; const threads = getReviewThreads(); const index = threads.findIndex(thread => thread.id === threadId); if (index < 0) return false;
+  threads[index] = DiagramWeaveContracts.setReviewStatus(threads[index], status); void captureVersionSnapshot('Review status', true); renderReviewPanel(); return true;
+}
+function locateReviewThread(threadId) {
+  const thread = getReviewThreads().find(item => item.id === threadId); const page = thread && findReviewTarget(thread); if (!thread || !page) return false;
+  if (page.id !== DiagramWeave.doc.currentPageId) DiagramWeave.switchPage(page.id); hideReviewPanel(); if (thread.targetType === 'connection') selectConnection(thread.targetId); else selectNode(thread.targetId); return true;
+}
+
+function renderAISettings() {
+  if (typeof DiagramWeaveContracts === 'undefined') return;
+  const toggle = document.getElementById('aiGlobalEnabled'); const list = document.getElementById('aiProviderList'); const preview = document.getElementById('aiDataPreview');
+  toggle.checked = DiagramWeaveContracts.isAIEnabled(); const providers = DiagramWeaveContracts.listAIProviders(); list.replaceChildren(...providers.map(provider => { const row = document.createElement('div'); row.className = 'ai-provider-row'; row.textContent = `${provider.name} (${provider.id}) · ${provider.enabled ? 'enabled' : 'disabled'} · ${(provider.capabilities || []).join(', ')}`; return row; }));
+  if (!providers.length) { const empty = document.createElement('p'); empty.className = 'settings-hint'; empty.textContent = 'No AI providers registered. / 未注册 AI 提供者'; list.append(empty); }
+  preview.textContent = JSON.stringify(DiagramWeaveContracts.createAIDataPreview(getFlowDocumentPayload()), null, 2);
+}
+function showAISettings() { renderAISettings(); const overlay = document.getElementById('aiSettingsOverlay'); overlay.setAttribute('aria-hidden', 'false'); overlay.classList.add('visible'); overlay.querySelector('.dialog-close-btn')?.focus(); }
+function hideAISettings() { const overlay = document.getElementById('aiSettingsOverlay'); overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden', 'true'); }
+function setGlobalAIState(enabled) { if (typeof DiagramWeaveContracts === 'undefined') return false; DiagramWeaveContracts.setAIEnabled(enabled === true); renderAISettings(); return DiagramWeaveContracts.isAIEnabled(); }
+
+function updateCanvasEmptyState() {
+  const emptyState = document.getElementById('canvasEmptyState');
+  if (emptyState) emptyState.hidden = state.nodes.length > 0 || emptyState.dataset.dismissed === 'true';
+}
+
+function dismissCanvasEmptyState() {
+  const emptyState = document.getElementById('canvasEmptyState');
+  if (emptyState) {
+    emptyState.dataset.dismissed = 'true';
+    emptyState.hidden = true;
+  }
+  canvasWrapper.focus();
+}
+
+function togglePanelDrawer(panel) {
+  const className = panel === 'properties' ? 'properties-drawer-open' : 'shapes-drawer-open';
+  document.body.classList.toggle(className);
+  if (panel === 'properties') document.body.classList.remove('shapes-drawer-open');
+  else document.body.classList.remove('properties-drawer-open');
+}
+
+function updatePropTextColor(value) {
+  if (value === 'custom' || value === '__mixed__') return;
+  const next = typeof DiagramWeaveSanitize !== 'undefined'
+    ? DiagramWeaveSanitize.sanitizeTextColor(value)
+    : value;
+  applyBatchNodeProperty('textColor', next);
 }
 
 function updatePropTargetPage(pageId) {
@@ -3288,11 +4729,8 @@ function navigateOffpageTarget() {
 }
 
 function updatePropLayer(layerId) {
-  const node = state.nodes.find(n => n.id === state.selectedNodeId);
-  if (!node) return;
-  saveState();
-  node.layer = layerId;
-  renderAll();
+  if (!Number.isFinite(layerId)) return;
+  applyBatchNodeProperty('layer', layerId);
 }
 
 // 更新流程耗时统计
@@ -3336,6 +4774,7 @@ canvasWrapper.addEventListener('dragover', (e) => {
 
 canvasWrapper.addEventListener('drop', (e) => {
   e.preventDefault();
+  if (isMobileViewMode()) return;
   const shape = e.dataTransfer.getData('shape');
   const label = e.dataTransfer.getData('label');
   if (!shape) return;
@@ -3348,6 +4787,7 @@ canvasWrapper.addEventListener('drop', (e) => {
   saveState();
   const node = createNode(shape, x - defaults.w / 2, y - defaults.h / 2, label);
   state.nodes.push(node);
+  recordRecentShape(shape);
   selectNode(node.id);
   showToast(typeof t === 'function' ? t('toast.addedShape', { label }) : `已添加「${label}」`);
 });
@@ -3429,6 +4869,29 @@ canvasWrapper.addEventListener('wheel', (e) => {
 
 // ===== 键盘事件 =====
 document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLocaleLowerCase() === 'k') {
+    e.preventDefault();
+    openCommandPalette();
+    return;
+  }
+  if (e.key === 'Escape' && document.getElementById('commandPaletteOverlay')?.classList.contains('visible')) {
+    e.preventDefault();
+    closeCommandPalette();
+    return;
+  }
+  if (e.key === 'Escape' && document.getElementById('importPreviewOverlay')?.classList.contains('visible')) {
+    e.preventDefault();
+    cancelImportPreview();
+    return;
+  }
+  if (e.key === 'Escape' && document.getElementById('mappingWizardOverlay')?.classList.contains('visible')) {
+    e.preventDefault();
+    cancelMappingWizard();
+    return;
+  }
+  if (trapCommandPaletteFocus(e)) return;
+  if (trapImportPreviewFocus(e)) return;
+  if (trapMappingWizardFocus(e)) return;
   if (e.target.contentEditable === 'true' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
   // 演示模式快捷键
@@ -3451,6 +4914,8 @@ document.addEventListener('keydown', (e) => {
     // 演示模式下屏蔽其他快捷键
     return;
   }
+
+  if (isMobileViewMode()) return;
 
   if (e.key === ' ') {
     e.preventDefault();
@@ -4147,11 +5612,11 @@ function buildExportSVG() {
       width: 1.8,
       pathD,
       points: sampleSvgPath(pathD, 12),
-      layout: conn.label ? getConnLabelLayout(from, to, conn.labelPos) : null,
+      layout: conn.label ? getConnLabelLayout(from, to, conn.labelPlacement || conn.labelPos, conn.labelOffset) : null,
     });
     svg += `<path d="${pathD}" fill="none" stroke="#6b6f85" stroke-width="1.8" marker-end="url(#${markerId})"/>`;
     if (conn.label) {
-      const layout = getConnLabelLayout(from, to, conn.labelPos);
+      const layout = getConnLabelLayout(from, to, conn.labelPlacement || conn.labelPos, conn.labelOffset);
       exportLabels.push({ conn, layout });
     }
   });
@@ -4168,7 +5633,10 @@ function buildExportSVG() {
     } else {
       svg += `<rect x="${node.x}" y="${node.y}" width="${node.w}" height="${node.h}" rx="6" fill="#1e2029" stroke="#3a3e55" stroke-width="2"/>`;
     }
-    svg += `<text x="${cx}" y="${cy}" fill="#e8eaf0" font-size="13" text-anchor="middle" dominant-baseline="central">${escapeHtml(node.label)}</text>`;
+    const textColor = typeof DiagramWeaveNodeColors !== 'undefined'
+      ? DiagramWeaveNodeColors.resolveTextColor(node.fillColor, node.textColor)
+      : (node.textColor && node.textColor !== 'auto' ? node.textColor : '#ffffff');
+    svg += `<text x="${cx}" y="${cy}" fill="${escapeHtml(textColor)}" font-size="13" text-anchor="middle" dominant-baseline="central">${escapeHtml(node.label)}</text>`;
   });
 
   svg += '</svg>';
@@ -4355,8 +5823,9 @@ async function writeProjectFile(fileHandle) {
   projectSession.lastSavedAt = new Date();
 }
 
-function downloadProjectJson() {
+async function downloadProjectJson(includeHistory = false) {
   const payload = getFlowDocumentPayload();
+  if (includeHistory && versionHistoryStore) payload.versionHistory = await versionHistoryStore.list(projectSession.historyId);
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -4365,10 +5834,10 @@ function downloadProjectJson() {
   URL.revokeObjectURL(a.href);
 }
 
-function downloadProjectVso() {
+async function downloadProjectVso(includeHistory = false) {
   const prev = projectSession.fileFormat;
   projectSession.fileFormat = 'vso';
-  downloadProjectJson();
+  await downloadProjectJson(includeHistory);
   projectSession.fileFormat = prev;
   showToast(typeof t === 'function' ? t('toast.exportVso') : '已导出 DiagramWeave VSO 工作档案');
 }
@@ -4507,10 +5976,41 @@ async function openProjectFileWithPicker() {
   }
   const isExcel = lowerName.endsWith('.xlsx');
   const isVso = lowerName.endsWith('.vso');
-  const raw = isExcel ? null : JSON.parse(await file.text());
+  let raw = null;
+  if (!isExcel) {
+    try {
+      raw = JSON.parse(await file.text());
+    } catch (parseError) {
+      const message = typeof t === 'function'
+        ? t('error.invalidJsonFile', { file: file.name })
+        : `文件 ${file.name} 不是有效的 JSON 文件，无法打开。`;
+      showToast(message, 'error');
+      return;
+    }
+  }
+  if (!isExcel) {
+    queueDocumentImport(raw, {
+      sourceName: file.name,
+      sourceType: isVso ? 'vso' : 'json',
+      apply: document => {
+        const loaded = loadFlowDocumentPayload(document);
+        if (!loaded) return false;
+        projectSession.fileHandle = handle;
+        projectSession.fileFormat = isVso ? 'vso' : 'json';
+        if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$|\.vso$/i, '');
+        updateProjectTitle();
+        restartAutosaveTimer();
+        showToast('已打开工作文件，自动保存已启用');
+        return true;
+      },
+    });
+    return;
+  }
+
+  if (isMobileViewMode()) return;
   const loaded = isExcel
     ? loadProjectExcelArrayBuffer(await file.arrayBuffer())
-    : loadFlowDocumentPayload(raw);
+    : false;
   if (loaded) {
     if (isExcel && projectSession.lastExcelLoadKind === 'data') {
       projectSession.fileHandle = null;
@@ -4543,6 +6043,8 @@ function resetToBlankProject() {
   if (projectSession.autosaveTimer) clearInterval(projectSession.autosaveTimer);
   projectSession.autosaveTimer = null;
   projectSession.name = DEFAULT_PROJECT_NAME;
+  projectSession.historyId = `history_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  lastHistoryFingerprint = '';
   state.nodes = [];
   state.connections = [];
   state.nextId = 1;
@@ -4620,9 +6122,10 @@ function getFlowDocumentPayload() {
   if (typeof DiagramWeave !== 'undefined') DiagramWeave.syncPageFromState();
   const payload = typeof DiagramWeave !== 'undefined'
     ? DiagramWeave.serializeDocument()
-    : { version: 1, nodes: state.nodes, connections: state.connections, nextId: state.nextId, connRouteMode: state.connRouteMode };
+    : { version: 1, nodes: state.nodes, connections: state.connections, nextId: state.nextId, connRouteMode: state.connRouteMode, routingRules: state.routingRules };
   payload.projectName = projectSession.name;
   payload.autosaveSeconds = projectSession.autosaveSeconds;
+  payload.historyId = projectSession.historyId;
   return payload;
 }
 
@@ -4643,6 +6146,9 @@ function loadFlowDocumentPayload(raw) {
     showToast('文件格式无效或数据被拒绝');
     return false;
   }
+  if (typeof DiagramWeaveRoutingRules !== 'undefined') state.routingRules = DiagramWeaveRoutingRules.normalizeRules(data.routingRules);
+  projectSession.historyId = data.historyId || raw.historyId || projectSession.historyId;
+  if (Array.isArray(raw.versionHistory) && versionHistoryStore) void versionHistoryStore.importRows(projectSession.historyId, raw.versionHistory);
   if (data.version === 2 && data.pages && typeof DiagramWeave !== 'undefined') {
     saveState();
     projectSession.name = normalizeProjectName(data.projectName || raw.projectName || projectSession.name);
@@ -4708,18 +6214,24 @@ function handleFileLoad(e) {
   const lowerName = file.name.toLowerCase();
   if (isNativeVisioFileName(file.name)) {
     file.arrayBuffer()
-      .then((buffer) => {
-        if (typeof DiagramWeaveExtensionKernel !== 'undefined') {
-          const result = DiagramWeaveExtensionKernel.invokeExtension('visio.preview', {
-            buffer,
-            fileName: file.name,
-          });
-          showVisioPreviewResult(result);
-        } else {
-          showNativeVisioUnsupported(file.name);
-        }
+      .then(async (buffer) => {
+        if (typeof DiagramWeaveVisioBridge === 'undefined') return showNativeVisioUnsupported(file.name);
+        const result = await DiagramWeaveVisioBridge.importVsdx(buffer, file.name);
+        if (!result.success) return showVisioPreviewResult(result);
+        queueDocumentImport(result.data, {
+          sourceName: file.name,
+          sourceType: 'vsdx',
+          issues: result.issues,
+          warnings: result.warnings,
+          apply: documentPayload => {
+            const loaded = loadFlowDocumentPayload(documentPayload);
+            if (!loaded) return false;
+            projectSession.fileHandle = null; projectSession.fileFormat = 'json'; updateProjectTitle(); restartAutosaveTimer();
+            showToast('VSDX preview applied as a DiagramWeave document'); return true;
+          },
+        });
       })
-      .catch(() => showNativeVisioUnsupported(file.name));
+      .catch((error) => showVisioPreviewResult({ success: false, issues: [{ message: error.message }] }));
     e.target.value = '';
     return;
   }
@@ -4742,15 +6254,22 @@ function handleFileLoad(e) {
   reader.onload = (ev) => {
     try {
       const raw = JSON.parse(ev.target.result);
-      const loaded = loadFlowDocumentPayload(raw);
-      if (loaded) {
-        projectSession.fileHandle = null;
-        projectSession.fileFormat = lowerName.endsWith('.vso') ? 'vso' : 'json';
-        if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$|\.vso$/i, '');
-        updateProjectTitle();
-        restartAutosaveTimer();
-        showToast('浏览器不支持原文件自动保存；请使用保存按钮下载更新后的工作文件');
-      }
+      const isVso = lowerName.endsWith('.vso');
+      queueDocumentImport(raw, {
+        sourceName: file.name,
+        sourceType: isVso ? 'vso' : 'json',
+        apply: document => {
+          const loaded = loadFlowDocumentPayload(document);
+          if (!loaded) return false;
+          projectSession.fileHandle = null;
+          projectSession.fileFormat = isVso ? 'vso' : 'json';
+          if (!raw.projectName) projectSession.name = file.name.replace(/\.diagramweave\.json$|\.json$|\.vso$/i, '');
+          updateProjectTitle();
+          restartAutosaveTimer();
+          showToast('文件已导入；请保存新的工作文件以继续编辑');
+          return true;
+        },
+      });
     } catch (err) {
       showToast('文件格式错误');
     }
@@ -4770,7 +6289,7 @@ function startConnectionLabelEdit(connId, e) {
 
   const from = getPortPos(fromNode, conn.fromPort);
   const to = getPortPos(toNode, conn.toPort);
-  const layout = getConnLabelLayout(from, to, conn.labelPos);
+  const layout = getConnLabelLayout(from, to, conn.labelPlacement || conn.labelPos, conn.labelOffset);
 
   // 创建输入框
   const input = document.createElement('input');
@@ -5213,7 +6732,7 @@ function renderPresentZoomPreview(node, connStep) {
   const h = Math.round(node.h * scale);
   preview.innerHTML = `
     <div class="present-zoom-node shape-${getNodeVisualShape(node.shape)}" style="width:${w}px;height:${h}px">
-      <div class="present-zoom-shape" style="width:100%;height:100%;background:${node.fillColor};border-color:${node.strokeColor}">
+      <div class="present-zoom-shape" style="width:100%;height:100%;background:${node.fillColor};border-color:${node.strokeColor};color:${typeof DiagramWeaveNodeColors !== 'undefined' ? DiagramWeaveNodeColors.resolveTextColor(node.fillColor, node.textColor) : '#ffffff'}">
         <span class="present-zoom-label">${escapeHtml(node.label)}</span>
       </div>
     </div>`;
@@ -5745,6 +7264,18 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function sanitizeSvg(svgText) {
+  if (typeof svgText !== 'string') return '';
+  return svgText
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/\bon\w+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\bon\w+\s*=\s*'[^']*'/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/javascript\s*:/gi, 'blocked:');
+}
+
 // ===== Excel 模板导出 / 导入（离线 SheetJS）=====
 function exportExcelTemplate() {
   if (typeof XLSX === 'undefined') {
@@ -5775,6 +7306,7 @@ function exportCanvasToExcel() {
       '高': n.h,
       '填充色': n.fillColor || '',
       '线条色': n.strokeColor || '',
+      '文字色': n.textColor || 'auto',
       '详细说明': n.detail || '',
       '耗时天': n.duration || 0,
       '泳道': n.lane ?? '',
@@ -5881,6 +7413,7 @@ function buildProjectExcelWorkbook() {
         '高': node.h,
         '填充色': node.fillColor || '',
         '线条色': node.strokeColor || '',
+        '文字色': node.textColor || 'auto',
         '详细说明': node.detail || '',
         '耗时天': node.duration || 0,
         '泳道': node.lane ?? '',
@@ -5893,7 +7426,7 @@ function buildProjectExcelWorkbook() {
   nodeSheet['!cols'] = [
     { wch: 18 }, { wch: 18 }, { wch: 8 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
     { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 10 },
-    { wch: 34 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 18 },
+    { wch: 10 }, { wch: 34 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 18 },
   ];
   XLSX.utils.book_append_sheet(wb, nodeSheet, '节点');
 
@@ -6043,6 +7576,7 @@ function parseExcelNodeRow(row) {
   const h = parseOptionalExcelNumber(pickExcelField(row, ['高', 'height', 'H']));
   const fillColor = pickExcelField(row, ['填充色', 'fillColor', 'fill', '背景色']);
   const strokeColor = pickExcelField(row, ['线条色', '边框色', 'strokeColor', 'stroke']);
+  const textColor = pickExcelField(row, ['文字色', 'textColor', '文本色']);
   const detail = pickExcelField(row, ['详细说明', 'detail', '说明', 'description']);
   const rawDuration = parseFloat(pickExcelField(row, ['耗时天', '耗时', 'duration', '时间', 'time']) || 0) || 0;
   const duration = Math.max(0, Math.min(999999, rawDuration));
@@ -6060,6 +7594,9 @@ function parseExcelNodeRow(row) {
     h,
     fillColor: sanitizeExcelText(fillColor, 20),
     strokeColor: sanitizeExcelText(strokeColor, 20),
+    textColor: typeof DiagramWeaveSanitize !== 'undefined'
+      ? DiagramWeaveSanitize.sanitizeTextColor(textColor)
+      : (sanitizeExcelText(textColor, 20) || 'auto'),
     detail: sanitizeExcelText(detail, MAX_EXCEL_DETAIL_LENGTH),
     duration,
     lane: laneRaw !== '' ? Math.max(0, Math.min(99999, parseInt(laneRaw, 10) || 0)) : undefined,
@@ -6139,9 +7676,19 @@ function loadProjectExcelArrayBuffer(arrayBuffer) {
   const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
   const projectSheetName = workbook.SheetNames.find(n => n === '项目');
   if (projectSheetName) {
-    const loaded = loadEditableProjectExcelWorkbook(workbook);
-    if (loaded) projectSession.lastExcelLoadKind = 'project';
-    return loaded;
+    const candidate = loadEditableProjectExcelWorkbook(workbook, { previewOnly: true });
+    if (!candidate?.document) return false;
+    const preview = createImportPreview(candidate.document, 'excel');
+    preview.issues.push(
+      ...candidate.skippedNodes.map(item => ({ code: 'SKIPPED_NODE', severity: 'error', row: item.row, field: 'node', reason: item.reason })),
+      ...candidate.skippedConnections.map(item => ({ code: 'SKIPPED_CONNECTION', severity: 'error', row: item.row, field: 'connection', reason: item.reason })),
+    );
+    projectSession.lastExcelLoadKind = 'project';
+    showImportPreview(preview, {
+      sourceName: 'Excel 项目',
+      apply: document => loadFlowDocumentPayload(document),
+    });
+    return true;
   }
   const sheetName = workbook.SheetNames.find(n => n === '_DiagramWeaveJSON' || n === 'DiagramWeaveJSON');
   if (!sheetName) {
@@ -6162,7 +7709,12 @@ function loadProjectExcelArrayBuffer(arrayBuffer) {
     showToast('Excel 工作文件缺少图形数据');
     return false;
   }
-  return loadFlowDocumentPayload(JSON.parse(json));
+  const preview = createImportPreview(JSON.parse(json), 'excel');
+  showImportPreview(preview, {
+    sourceName: 'Excel 项目',
+    apply: document => loadFlowDocumentPayload(document),
+  });
+  return true;
 }
 
 function parseExcelBool(value, fallback = false) {
@@ -6185,7 +7737,7 @@ function getExcelSheetRows(workbook, names) {
   return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
 }
 
-function loadEditableProjectExcelWorkbook(workbook) {
+function loadEditableProjectExcelWorkbook(workbook, options = {}) {
   const projectRows = getExcelSheetRows(workbook, ['项目']);
   const project = projectRows[0] || {};
   if (project['格式'] && String(project['格式']).trim() !== 'DiagramWeaveEditableExcel') {
@@ -6260,6 +7812,9 @@ function loadEditableProjectExcelWorkbook(workbook) {
       label: sanitizeExcelText(row['简介'] || '未命名', MAX_EXCEL_LABEL_LENGTH),
       fillColor: sanitizeExcelText(row['填充色'] || getDefaultNodeFill(), 20),
       strokeColor: sanitizeExcelText(row['线条色'] || getDefaultNodeStroke(), 20),
+      textColor: typeof DiagramWeaveSanitize !== 'undefined'
+        ? DiagramWeaveSanitize.sanitizeTextColor(row['文字色'])
+        : (sanitizeExcelText(row['文字色'], 20) || 'auto'),
       detail: sanitizeExcelText(row['详细说明'], MAX_EXCEL_DETAIL_LENGTH),
       duration: parseExcelNumber(row['耗时天'], 0),
       role: sanitizeExcelText(row['角色'], MAX_EXCEL_ROLE_LENGTH),
@@ -6333,6 +7888,10 @@ function loadEditableProjectExcelWorkbook(workbook) {
     nextId: parseExcelNumber(project['下一个对象ID'], 1),
     connRouteMode: sanitizeExcelText(project['连线模式'] || state.connRouteMode, 32),
   };
+
+  if (options.previewOnly) {
+    return { document: doc, skippedNodes, skippedConnections };
+  }
 
   const loaded = loadFlowDocumentPayload(doc);
   if (loaded) {
@@ -6482,77 +8041,20 @@ function importExcelWorkbookData(workbook) {
     showToast(`Excel 连线超限，最多允许 ${MAX_EXCEL_CONN_ROWS} 行`);
     return false;
   }
-
-  const nodeRows = [];
-  nodeData.forEach(row => {
-    const parsed = parseExcelNodeRow(row);
-    if (parsed.id === '' || parsed.id === undefined || parsed.id === null) return;
-    const refId = parseInt(parsed.id, 10);
-    if (isNaN(refId)) return;
-    nodeRows.push({
-      refId,
-      label: parsed.label,
-      role: parsed.role,
-      shape: parsed.shape,
-      x: parsed.x,
-      y: parsed.y,
-      w: parsed.w,
-      h: parsed.h,
-      fillColor: parsed.fillColor,
-      strokeColor: parsed.strokeColor,
-      detail: parsed.detail,
-      duration: parsed.duration,
-      lane: parsed.lane,
-      layer: parsed.layer,
-      targetPage: parsed.targetPage,
-    });
+  startMappingWizard({
+    nodeRows: nodeData,
+    connectionRows: connData,
+    sourceName: 'Excel 数据表',
+    sourceType: 'excel',
+    onApply: document => {
+      const loaded = loadFlowDocumentPayload(document);
+      if (loaded) {
+        hideExcelDataDialog();
+        setExcelImportStatus('映射后的 Excel 数据已导入', 'success');
+      }
+      return loaded;
+    },
   });
-
-  const connRows = [];
-  connData.forEach((row, index) => {
-    const from = parseInt(pickExcelField(row, ['起点编号', 'from', '起始', 'source']), 10);
-    const to = parseInt(pickExcelField(row, ['终点编号', 'to', '目标', 'target']), 10);
-    if (isNaN(from) || isNaN(to)) return;
-    connRows.push({
-      from,
-      to,
-      sourceRow: index + 2,
-      label: sanitizeExcelText(pickExcelField(row, ['条件', 'label', '标签']) || '', MAX_EXCEL_LABEL_LENGTH),
-      fromPort: normalizePortName(pickExcelField(row, ['起点端口', 'fromPort', 'sourcePort']), 'bottom'),
-      toPort: normalizePortName(pickExcelField(row, ['终点端口', 'toPort', 'targetPort']), 'top'),
-      labelPos: parseExcelLabelPos(pickExcelField(row, ['标签位置', 'labelPos'])),
-    });
-  });
-
-  if (nodeRows.length === 0) {
-    showToast('未解析到有效节点行，请检查「编号」列');
-    return false;
-  }
-
-  const prepared = prepareFlowImportData(nodeRows, connRows, { reportCycleConnections: false });
-  projectSession.lastExcelImportDiagnostics = {
-    skippedConnections: prepared.skippedConnections,
-    referenceConnections: [],
-  };
-
-  applyFlowData(prepared.nodeRows, prepared.connRows, false);
-  if (prepared.skippedConnections.length > 0) {
-    const issueSummary = [
-      ...prepared.skippedConnections,
-    ]
-      .slice(0, 3)
-      .map(item => item.reason)
-      .join('；');
-    const statusParts = [];
-    if (prepared.skippedConnections.length > 0) {
-      statusParts.push(`跳过 ${prepared.skippedConnections.length} 条无法落图连线`);
-    }
-    showToast(`已导入 ${state.nodes.length} 个节点、${state.connections.length} 条连线；${statusParts.join('；')}`);
-    setExcelImportStatus(`已按文档导入。${statusParts.join('；')}：${issueSummary}`, 'success');
-  } else {
-    hideExcelDataDialog();
-    showToast(`已从 Excel 数据表导入 ${state.nodes.length} 个节点，${state.connections.length} 条连线`);
-  }
   return true;
 }
 
@@ -6689,12 +8191,20 @@ async function bootDiagramWeave() {
     initConnRouteAlgorithms();
   }
   initColorSwatches();
+  initPropertyEditingWorkflow();
+  initAccessibility();
+  initModalContracts();
+  initEditorCommands();
   initFastTooltips(document.querySelector('.toolbar'));
   initFastTooltips(document.getElementById('propertiesPanel'));
   initConnRouteMode();
   initShapeTypeSelect();
   setTool('select');
   initTemplates();
+  initShapeLibraryWorkflow();
+  initStencilManager();
+  initVersionHistory();
+  initCanvasNavigation();
   updateProjectTitle();
   restartAutosaveTimer();
 
@@ -6706,8 +8216,6 @@ async function bootDiagramWeave() {
   loadE2eSeedNodesFromSession();
   renderAll();
   applyDeepLinkHighlight();
-  setTimeout(promptInitialProjectSave, 600);
-
   if (location.protocol === 'file:' && !sessionStorage.getItem('fc-file-protocol-hint')) {
     sessionStorage.setItem('fc-file-protocol-hint', '1');
     setTimeout(() => {
