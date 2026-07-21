@@ -5,15 +5,17 @@
   const DARK_TEXT = '#111320';
   const LIGHT_TEXT = '#ffffff';
 
-  function normalizeHex(value) {
-    if (typeof value !== 'string') return null;
-    const hex = value.trim().toLowerCase();
-    if (/^#[0-9a-f]{6}$/.test(hex)) return hex;
-    if (/^#[0-9a-f]{3}$/.test(hex)) {
-      return '#' + hex.slice(1).split('').map(char => char + char).join('');
-    }
-    return null;
-  }
+  const normalizeHex = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.normalizeHex === 'function'
+    ? global.DiagramWeaveUtils.normalizeHex
+    : (value => {
+        if (typeof value !== 'string') return null;
+        const hex = value.trim().toLowerCase();
+        if (/^#[0-9a-f]{6}$/.test(hex)) return hex;
+        if (/^#[0-9a-f]{3}$/.test(hex)) {
+          return '#' + hex.slice(1).split('').map(char => char + char).join('');
+        }
+        return null;
+      });
 
   function relativeLuminance(hex) {
     const normalized = normalizeHex(hex);

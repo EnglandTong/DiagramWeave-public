@@ -10,6 +10,10 @@
   }
 
   function escapeHtml(str) {
+    // 委托至 editor/text-utils.js（Loop 2.4 Slice 1 抽取）；不可用时退回本地最小实现（不转义单引号，足够 title= 场景）。
+    if (typeof global.DiagramWeaveEditorText !== 'undefined' && typeof global.DiagramWeaveEditorText.escapeHtml === 'function') {
+      return global.DiagramWeaveEditorText.escapeHtml(str);
+    }
     return String(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')

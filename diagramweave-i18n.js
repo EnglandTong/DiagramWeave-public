@@ -6,11 +6,15 @@
 
   const STORAGE_KEY = 'dw-locale';
   const SUPPORTED = ['zh-CN', 'en'];
+  const FALLBACK = 'zh-CN';
   let locale = 'zh-CN';
   let messages = {};
   const onChangeCallbacks = [];
+  let _hotReloadTimer = null;
+  let _hotReloadRunning = false;
+  const _lastModified = {};
 
-  const PACKED = {
+  const FALLBACK_MESSAGES = {
     'zh-CN': {
       'app.title': 'DiagramWeave - 流程图编辑器',
       'app.subtitle': '流程图编辑器',
@@ -196,7 +200,7 @@
       'excel.col.refId': '编号',
       'excel.col.label': '简介',
       'excel.col.role': '角色',
-      'excel.col.shape': '形状',
+      'excel.col.shape': '图形',
       'excel.col.detail': '详细说明',
       'excel.col.duration': '耗时天',
       'excel.col.lane': '泳道',
@@ -366,7 +370,7 @@
       'present.leftDescHint': 'Current step details appear on the left during presentation.',
       'present.defaultPath': 'Default path',
       'present.pathLabel': 'Connection path',
-      'present.routeTo': 'Moving from “{{from}}” along “{{cond}}” to “{{to}}”. Press Next again to arrive.',
+      'present.routeTo': 'Moving from "{{from}}" along "{{cond}}" to "{{to}}". Press Next again to arrive.',
       'present.routeMoving': 'Moving along the current connection.',
       'present.noIncoming': '(No incoming connections)',
       'present.noOutgoing': '(No outgoing connections)',
@@ -465,7 +469,7 @@
       'dialog.excel.downloadTemplate': '1. Download blank template',
       'dialog.excel.exportCurrent': 'Export current flow to Excel',
       'dialog.excel.uploadImport': '2. Upload and import',
-      'dialog.excel.projectHint': 'The Excel project file is an editable multi-sheet archive with Project / Pages / Layers / Nodes / Connections. “Export current flow to Excel” only exports current-page data tables.',
+      'dialog.excel.projectHint': 'The Excel project file is an editable multi-sheet archive with Project / Pages / Layers / Nodes / Connections. "Export current flow to Excel" only exports current-page data tables.',
       'dialog.excel.saveProjectExcel': 'Save full Excel project file',
       'dialog.excel.loadProjectExcel': 'Load full Excel project file',
       'excel.col.refId': 'ID',
@@ -514,7 +518,7 @@
       'toast.langChanged': 'Language updated',
       'toast.settingsSaved': 'Settings saved',
       'toast.connRoute': 'Routing: {{mode}}',
-      'toast.addedShape': 'Added “{{label}}”',
+      'toast.addedShape': 'Added "{{label}}"',
       'toast.layoutEmpty': 'Canvas is empty',
       'toast.layoutDone': 'Layout applied',
       'toast.exportPng': 'PNG exported',
@@ -569,9 +573,9 @@
   }
 
   function t(key, vars) {
-    const bucket = messages[locale] || messages['zh-CN'] || {};
-    const fb = PACKED['zh-CN'][key] || key;
-    return interpolate(bucket[key] || PACKED[locale]?.[key] || fb, vars);
+    const bucket = messages[locale] || messages[FALLBACK] || {};
+    const fb = FALLBACK_MESSAGES[FALLBACK][key] || key;
+    return interpolate(bucket[key] || FALLBACK_MESSAGES[locale]?.[key] || fb, vars);
   }
 
   function getLocale() {
@@ -591,16 +595,28 @@
     return nav.startsWith('zh') ? 'zh-CN' : 'en';
   }
 
-  async function loadLocale(next) {
-    const target = SUPPORTED.includes(next) ? next : 'zh-CN';
-    messages[target] = { ...PACKED[target] };
+  async function loadMessages(targetLocale, forceReload) {
+    const localeKey = SUPPORTED.includes(targetLocale) ? targetLocale : FALLBACK;
+    const url = `i18n/${localeKey}.json${forceReload ? '?t=' + Date.now() : ''}`;
     try {
-      const res = await fetch(`locales/${target}.json`, { cache: 'no-cache' });
+      const res = await fetch(url, {
+        cache: forceReload ? 'no-cache' : 'default',
+      });
       if (res.ok) {
-        const external = await res.json();
-        messages[target] = { ...messages[target], ...external };
+        const data = await res.json();
+        messages[localeKey] = data;
+        return true;
       }
-    } catch { /* packed fallback only */ }
+    } catch { /* ignore */ }
+    return false;
+  }
+
+  async function loadLocale(next) {
+    const target = SUPPORTED.includes(next) ? next : FALLBACK;
+    const loaded = await loadMessages(target);
+    if (!loaded) {
+      messages[target] = { ...FALLBACK_MESSAGES[target] };
+    }
     locale = target;
     try { localStorage.setItem(STORAGE_KEY, locale); } catch { /* ignore */ }
     document.documentElement.lang = locale === 'en' ? 'en' : 'zh-CN';
@@ -654,6 +670,61 @@
     applyDom();
   }
 
+  async function reloadMessages(forceReload) {
+    await loadMessages(locale, forceReload);
+    applyDom();
+    onChangeCallbacks.forEach(fn => {
+      try { fn(locale); } catch { /* ignore */ }
+    });
+  }
+
+  async function _checkForUpdates() {
+    const localeKey = locale;
+    const url = `i18n/${localeKey}.json`;
+    try {
+      const headers = {};
+      if (_lastModified[localeKey]) {
+        headers['If-Modified-Since'] = _lastModified[localeKey];
+      }
+      const res = await fetch(url, {
+        method: 'HEAD',
+        headers,
+        cache: 'no-cache',
+      });
+      if (res.ok) {
+        const lastMod = res.headers.get('Last-Modified');
+        if (lastMod) {
+          if (_lastModified[localeKey] && _lastModified[localeKey] !== lastMod) {
+            _lastModified[localeKey] = lastMod;
+            await reloadMessages(true);
+            return true;
+          }
+          if (!_lastModified[localeKey]) {
+            _lastModified[localeKey] = lastMod;
+          }
+        }
+      }
+    } catch { /* ignore */ }
+    return false;
+  }
+
+  function startHotReload(intervalMs) {
+    stopHotReload();
+    const interval = typeof intervalMs === 'number' && intervalMs > 0 ? intervalMs : 3000;
+    _hotReloadRunning = true;
+    _hotReloadTimer = setInterval(() => {
+      _checkForUpdates();
+    }, interval);
+  }
+
+  function stopHotReload() {
+    if (_hotReloadTimer) {
+      clearInterval(_hotReloadTimer);
+      _hotReloadTimer = null;
+    }
+    _hotReloadRunning = false;
+  }
+
   global.DiagramWeaveI18n = {
     init,
     setLocale,
@@ -663,6 +734,10 @@
     applyDom,
     onChange,
     SUPPORTED,
+    reloadMessages,
+    loadMessages,
+    startHotReload,
+    stopHotReload,
   };
   global.t = t;
 })(typeof window !== 'undefined' ? window : globalThis);

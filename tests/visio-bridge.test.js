@@ -10,6 +10,10 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 function bridge() {
   const sandbox = {};
   sandbox.window = sandbox;
+  vm.runInNewContext(readFileSync(join(root, 'vsdx-geometry.js'), 'utf8'), sandbox);
+  vm.runInNewContext(readFileSync(join(root, 'vsdx-connectors.js'), 'utf8'), sandbox);
+  vm.runInNewContext(readFileSync(join(root, 'vsdx-parser.js'), 'utf8'), sandbox);
+  vm.runInNewContext(readFileSync(join(root, 'vsdx-packager.js'), 'utf8'), sandbox);
   vm.runInNewContext(readFileSync(join(root, 'diagramweave-visio-bridge.js'), 'utf8'), sandbox);
   return sandbox.DiagramWeaveVisioBridge;
 }

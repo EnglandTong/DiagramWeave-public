@@ -1,7 +1,9 @@
 (function initShapeLibrary(global) {
   'use strict';
 
-  const normalize = value => String(value || '').trim();
+  const normalize = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.normalize === 'function'
+  ? global.DiagramWeaveUtils.normalize
+  : (value => String(value || '').trim());
   const lower = value => normalize(value).toLocaleLowerCase();
 
   function createRegistry(initial = []) {

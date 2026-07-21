@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DiagramWeave 连线系统设计</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+
+  <style id="theme-vars">
+    :root {
+      --bg-canvas: #0c0e14;
+      --bg-base: #111320;
+      --bg-surface: #161828;
+      --bg-elevated: #1c1f32;
+      --bg-hover: #232740;
+      --bg-active: #2a2e48;
+      --bg-code: #1a1d2e;
+      --accent: #7c6aff;
+      --accent-hover: #9488ff;
+      --accent-dim: rgba(124, 106, 255, 0.12);
+      --accent-glow: rgba(124, 106, 255, 0.25);
+      --accent-surface: rgba(124, 106, 255, 0.06);
+      --accent-secondary: #38bdf8;
+      --accent-secondary-dim: rgba(56, 189, 248, 0.12);
+      --status-success: #34d399;
+      --status-success-dim: rgba(52, 211, 153, 0.12);
+      --status-warning: #fbbf24;
+      --status-warning-dim: rgba(251, 191, 36, 0.12);
+      --status-danger: #f87171;
+      --status-danger-dim: rgba(248, 113, 113, 0.12);
+      --status-info: #60a5fa;
+      --status-info-dim: rgba(96, 165, 250, 0.12);
+      --text-primary: #e8eaf2;
+      --text-secondary: #9498b4;
+      --text-muted: #5e6280;
+      --text-on-accent: #ffffff;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(255, 255, 255, 0.12);
+      --border-focus: var(--accent);
+      --divider: rgba(255, 255, 255, 0.04);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+      --shadow-glow: 0 0 20px rgba(124, 106, 255, 0.15);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 12px;
+      --space-lg: 16px;
+      --space-xl: 20px;
+      --space-2xl: 24px;
+      --space-3xl: 32px;
+      --transition-fast: 120ms ease;
+      --transition-normal: 200ms ease;
+      --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+      --font-sans: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+      --font-display: 'Inter', system-ui, sans-serif;
+    }
+  </style>
+
+  <style type="text/tailwindcss">
+    @theme inline {
+      --color-bg-canvas: #0c0e14;
+      --color-bg-base: #111320;
+      --color-bg-surface: #161828;
+      --color-bg-elevated: #1c1f32;
+      --color-bg-hover: #232740;
+      --color-bg-active: #2a2e48;
+      --color-accent: #7c6aff;
+      --color-accent-hover: #9488ff;
+      --color-accent-secondary: #38bdf8;
+      --color-text-primary: #e8eaf2;
+      --color-text-secondary: #9498b4;
+      --color-text-muted: #5e6280;
+      --color-border: rgba(255, 255, 255, 0.06);
+      --color-border-hover: rgba(255, 255, 255, 0.12);
+    }
+
+    @layer base {
+      html {
+        font-family: 'Inter', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      body {
+        background: var(--bg-base);
+        color: var(--text-primary);
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <style>
+    body {
+      background: var(--bg-base);
+      font-family: var(--font-sans);
+    }
+
+    .page-header {
+      padding: 48px 40px 32px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-top: 8px;
+      max-width: 560px;
+      line-height: 1.6;
+    }
+
+    .section-header {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title .icon-wrapper {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+
+    .section-subtitle {
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .section-block {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 40px 48px;
+    }
+
+    .cards-grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+    }
+
+    .cards-grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .solution-card {
+      background: rgba(22, 24, 40, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .solution-card:hover {
+      border-color: rgba(255, 255, 255, 0.1);
+      background: rgba(28, 31, 50, 0.7);
+    }
+
+    .demo-canvas {
+      background: #0c0e14;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+      flex: 1;
+      min-height: 260px;
+    }
+
+    .demo-canvas svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .card-label-area {
+      margin-top: 14px;
+      flex-shrink: 0;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .card-desc {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      line-height: 1.5;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      gap: 4px;
+    }
+
+    .badge-default {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border: 1px solid rgba(124, 106, 255, 0.2);
+    }
+
+    .badge-recommended {
+      background: var(--accent-secondary-dim);
+      color: var(--accent-secondary);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+    }
+
+    .badge-primary-line {
+      background: rgba(124, 106, 255, 0.15);
+      color: #7c6aff;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+    }
+
+    .badge-secondary-line {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: var(--radius-full);
+    }
+
+    .dot-grid-pattern {
+      fill: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Flowing dot animation */
+    @keyframes flowDot {
+      0% { opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .flow-dot {
+      animation: flowDot 2s ease-in-out infinite;
+    }
+
+    /* Divider */
+    .section-divider {
+      max-width: 1280px;
+      margin: 0 auto 40px;
+      padding: 0 40px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border-hover), transparent);
+    }
+
+    /* Responsive */
+    @media (max-width: 1100px) {
+      .cards-grid-5 {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .cards-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 700px) {
+      .cards-grid-5,
+      .cards-grid-4 {
+        grid-template-columns: 1fr;
+      }
+      .page-header, .section-block {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+    }
+  </style>
+
+  <!-- Page Header -->
+  <header class="page-header">
+    <h1 class="page-title">DiagramWeave 连线系统设计</h1>
+    <p class="page-subtitle">
+      连线是流程图的核心视觉语言。DiagramWeave 提供多种连线风格与交叉处理方案，确保复杂图表始终清晰可读。
+    </p>
+  </header>
+
+  <!-- ==================== Section 1: Connection Styles ==================== -->
+  <section class="section-block">
+    <div class="section-header">
+      <div class="section-title">
+        <span class="icon-wrapper">
+          <i data-lucide="spline" style="width:16px;height:16px;"></i>
+        </span>
+        连线风格
+      </div>
+      <p class="section-subtitle">DiagramWeave 支持多种连线样式，适配不同流程图场景</p>
+    </div>
+
+    <div class="cards-grid-5">
+
+      <!-- ====== Style A: Bezier Curve ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas">
+          <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridA" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <linearGradient id="gradA" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#7c6aff" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <filter id="glowA">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="260" fill="url(#dotGridA)" />
+
+            <!-- Node A -->
+            <rect x="30" y="100" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="62" y="120" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 A</text>
+
+            <!-- Node B -->
+            <rect x="186" y="100" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="218" y="120" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 B</text>
+
+            <!-- Bezier path -->
+            <path id="bezierPath" d="M 94 116 C 130 116, 150 50, 186 116" stroke="url(#gradA)" stroke-width="2" fill="none" filter="url(#glowA)" />
+
+            <!-- Flowing dot -->
+            <circle r="3" fill="#7c6aff">
+              <animateMotion dur="2s" repeatCount="indefinite">
+                <mpath href="#bezierPath" />
+              </animateMotion>
+            </circle>
+            <circle r="3" fill="#38bdf8" opacity="0.6">
+              <animateMotion dur="2s" repeatCount="indefinite" begin="0.5s">
+                <mpath href="#bezierPath" />
+              </animateMotion>
+            </circle>
+
+            <!-- Arrow head at end -->
+            <circle cx="186" cy="116" r="3" fill="#38bdf8" opacity="0.5" />
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="card-title">贝塞尔曲线</span>
+            <span class="badge badge-default">默认</span>
+          </div>
+          <p class="card-desc">适合一般流程，平滑优雅</p>
+        </div>
+      </div>
+
+      <!-- ====== Style B: Orthogonal ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas">
+          <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridB" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <linearGradient id="gradB" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#7c6aff" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <filter id="glowB">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="260" fill="url(#dotGridB)" />
+
+            <!-- Node A -->
+            <rect x="30" y="30" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="62" y="50" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 A</text>
+
+            <!-- Node B -->
+            <rect x="186" y="192" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="218" y="212" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 B</text>
+
+            <!-- Orthogonal path with rounded corners -->
+            <path id="orthoPath" d="M 94 46 L 140 46 Q 150 46 150 56 L 150 192 Q 150 202 160 202 L 186 208" stroke="url(#gradB)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowB)" />
+
+            <!-- Flowing dot -->
+            <circle r="3" fill="#7c6aff">
+              <animateMotion dur="2.5s" repeatCount="indefinite">
+                <mpath href="#orthoPath" />
+              </animateMotion>
+            </circle>
+            <circle r="3" fill="#38bdf8" opacity="0.6">
+              <animateMotion dur="2.5s" repeatCount="indefinite" begin="0.6s">
+                <mpath href="#orthoPath" />
+              </animateMotion>
+            </circle>
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="card-title">正交折线</span>
+            <span class="badge badge-recommended">推荐</span>
+          </div>
+          <p class="card-desc">适合结构化流程图</p>
+        </div>
+      </div>
+
+      <!-- ====== Style C: Straight Line ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas">
+          <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridC" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <linearGradient id="gradC" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#7c6aff" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <marker id="arrowC" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                <path d="M 0 0 L 8 4 L 0 8 Z" fill="#38bdf8" />
+              </marker>
+              <filter id="glowC">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="260" fill="url(#dotGridC)" />
+
+            <!-- Node A -->
+            <rect x="30" y="110" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="62" y="130" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 A</text>
+
+            <!-- Node B -->
+            <rect x="186" y="110" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="218" y="130" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 B</text>
+
+            <!-- Straight line with arrow -->
+            <line id="straightPath" x1="94" y1="126" x2="186" y2="126" stroke="url(#gradC)" stroke-width="2" marker-end="url(#arrowC)" filter="url(#glowC)" />
+
+            <!-- Flowing dot -->
+            <circle r="3" fill="#7c6aff">
+              <animateMotion dur="1.8s" repeatCount="indefinite" path="M 94 126 L 186 126" />
+            </circle>
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">直线连接</span>
+          <p class="card-desc">适合简单关系</p>
+        </div>
+      </div>
+
+      <!-- ====== Style D: Step / Staircase ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas">
+          <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridD" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <linearGradient id="gradD" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#7c6aff" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <filter id="glowD">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="260" fill="url(#dotGridD)" />
+
+            <!-- Node A -->
+            <rect x="20" y="40" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="52" y="60" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 A</text>
+
+            <!-- Node B -->
+            <rect x="196" y="184" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="228" y="204" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 B</text>
+
+            <!-- Staircase path: 45-degree angled segments -->
+            <path id="stepPath" d="M 84 56 L 140 112 L 196 112 L 228 200" stroke="url(#gradD)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowD)" />
+
+            <!-- Flowing dot -->
+            <circle r="3" fill="#7c6aff">
+              <animateMotion dur="2.2s" repeatCount="indefinite">
+                <mpath href="#stepPath" />
+              </animateMotion>
+            </circle>
+            <circle r="3" fill="#38bdf8" opacity="0.6">
+              <animateMotion dur="2.2s" repeatCount="indefinite" begin="0.5s">
+                <mpath href="#stepPath" />
+              </animateMotion>
+            </circle>
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">阶梯线</span>
+          <p class="card-desc">适合时序图</p>
+        </div>
+      </div>
+
+      <!-- ====== Style E: Freehand / Organic ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas">
+          <svg viewBox="0 0 280 260" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridE" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <linearGradient id="gradE" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#7c6aff" />
+                <stop offset="100%" stop-color="#38bdf8" />
+              </linearGradient>
+              <filter id="glowE">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="260" fill="url(#dotGridE)" />
+
+            <!-- Node A -->
+            <rect x="20" y="100" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="52" y="120" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 A</text>
+
+            <!-- Node B -->
+            <rect x="196" y="100" width="64" height="32" rx="6" fill="#161828" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+            <text x="228" y="120" text-anchor="middle" fill="#e8eaf2" font-size="11" font-family="Inter, sans-serif" font-weight="500">节点 B</text>
+
+            <!-- Organic / freehand path with slight irregularity -->
+            <path id="freePath" d="M 84 112 C 100 112, 108 78, 122 84 C 136 90, 142 144, 156 140 C 170 136, 178 96, 192 108 C 200 114, 200 112, 196 116" stroke="url(#gradE)" stroke-width="2" fill="none" stroke-linecap="round" filter="url(#glowE)" />
+
+            <!-- Flowing dot -->
+            <circle r="3" fill="#7c6aff">
+              <animateMotion dur="2.4s" repeatCount="indefinite">
+                <mpath href="#freePath" />
+              </animateMotion>
+            </circle>
+            <circle r="3" fill="#38bdf8" opacity="0.6">
+              <animateMotion dur="2.4s" repeatCount="indefinite" begin="0.6s">
+                <mpath href="#freePath" />
+              </animateMotion>
+            </circle>
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">自由曲线</span>
+          <p class="card-desc">适合头脑风暴</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Divider -->
+  <div class="section-divider"></div>
+
+  <!-- ==================== Section 2: Cross-Over Solutions ==================== -->
+  <section class="section-block">
+    <div class="section-header">
+      <div class="section-title">
+        <span class="icon-wrapper">
+          <i data-lucide="git-branch" style="width:16px;height:16px;"></i>
+        </span>
+        交叉与跨越处理
+      </div>
+      <p class="section-subtitle">当连线不可避免地交叉时，提供清晰的视觉层次</p>
+    </div>
+
+    <div class="cards-grid-4">
+
+      <!-- ====== Solution A: Bridge / Overpass ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas" style="min-height: 240px;">
+          <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridXA" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <filter id="glowXA">
+                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="240" fill="url(#dotGridXA)" />
+
+            <!-- Primary line (vertical, goes straight through) -->
+            <line x1="140" y1="30" x2="140" y2="210" stroke="#7c6aff" stroke-width="2" filter="url(#glowXA)" />
+            <!-- Primary label -->
+            <text x="148" y="28" fill="#7c6aff" font-size="10" font-family="Inter, sans-serif" font-weight="500">主线</text>
+
+            <!-- Secondary line (horizontal) — broken with bridge arc -->
+            <path d="M 40 120 L 130 120" stroke="#38bdf8" stroke-width="2" fill="none" />
+            <!-- Bridge arc (semicircle going over the primary line) -->
+            <path d="M 130 120 A 10 10 0 0 1 150 120" stroke="#38bdf8" stroke-width="2" fill="none" stroke-linecap="round" />
+            <path d="M 150 120 L 240 120" stroke="#38bdf8" stroke-width="2" fill="none" />
+            <!-- Secondary label -->
+            <text x="242" y="118" fill="#38bdf8" font-size="10" font-family="Inter, sans-serif" font-weight="500">次线</text>
+
+            <!-- Intersection indicator -->
+            <circle cx="140" cy="120" r="2" fill="rgba(255,255,255,0.15)" />
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">桥接</span>
+          <p class="card-desc">底层连线在交叉点跳过</p>
+        </div>
+      </div>
+
+      <!-- ====== Solution B: Opacity Layering ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas" style="min-height: 240px;">
+          <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridXB" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <mask id="opacityMask">
+                <rect width="280" height="240" fill="white" />
+                <rect x="128" y="108" width="24" height="24" rx="2" fill="black" />
+              </mask>
+              <filter id="glowXB">
+                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="240" fill="url(#dotGridXB)" />
+
+            <!-- Primary line (vertical, full opacity, on top) -->
+            <line x1="140" y1="30" x2="140" y2="210" stroke="#7c6aff" stroke-width="2" filter="url(#glowXB)" />
+            <!-- Primary label -->
+            <text x="148" y="28" fill="#7c6aff" font-size="10" font-family="Inter, sans-serif" font-weight="500">主线</text>
+
+            <!-- Secondary line (horizontal) — masked at intersection to become transparent -->
+            <line x1="40" y1="120" x2="240" y2="120" stroke="#38bdf8" stroke-width="2" mask="url(#opacityMask)" />
+            <!-- Faint secondary in intersection zone -->
+            <line x1="128" y1="120" x2="152" y2="120" stroke="#38bdf8" stroke-width="2" opacity="0.15" />
+            <!-- Secondary label -->
+            <text x="242" y="118" fill="#38bdf8" font-size="10" font-family="Inter, sans-serif" font-weight="500">次线</text>
+
+            <!-- Intersection zone indicator (subtle) -->
+            <rect x="128" y="108" width="24" height="24" rx="2" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.5" stroke-dasharray="3 2" />
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">透明度分层</span>
+          <p class="card-desc">交叉区域自动降低底层透明度</p>
+        </div>
+      </div>
+
+      <!-- ====== Solution C: Gap Break ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas" style="min-height: 240px;">
+          <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridXC" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <filter id="glowXC">
+                <feGaussianBlur stdDeviation="1.5" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="240" fill="url(#dotGridXC)" />
+
+            <!-- Primary line (vertical, full, on top) -->
+            <line x1="140" y1="30" x2="140" y2="210" stroke="#7c6aff" stroke-width="2" filter="url(#glowXC)" />
+            <!-- Primary label -->
+            <text x="148" y="28" fill="#7c6aff" font-size="10" font-family="Inter, sans-serif" font-weight="500">主线</text>
+
+            <!-- Secondary line (horizontal) — with gap at intersection -->
+            <line x1="40" y1="120" x2="128" y2="120" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+            <line x1="152" y1="120" x2="240" y2="120" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+            <!-- Secondary label -->
+            <text x="242" y="118" fill="#38bdf8" font-size="10" font-family="Inter, sans-serif" font-weight="500">次线</text>
+
+            <!-- Gap zone indicator (subtle dashed rect) -->
+            <rect x="128" y="112" width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.5" stroke-dasharray="3 2" />
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">间隙中断</span>
+          <p class="card-desc">交叉点处断开底层连线</p>
+        </div>
+      </div>
+
+      <!-- ====== Solution D: Z-Order Highlight ====== -->
+      <div class="solution-card">
+        <div class="demo-canvas" style="min-height: 240px;">
+          <svg viewBox="0 0 280 240" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="dotGridXD" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+                <circle cx="8" cy="8" r="0.6" class="dot-grid-pattern" />
+              </pattern>
+              <filter id="glowXD">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+              <filter id="softGlow">
+                <feGaussianBlur stdDeviation="6" result="blur" />
+                <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.4 0" result="coloredBlur" />
+                <feMerge>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <rect width="280" height="240" fill="url(#dotGridXD)" />
+
+            <!-- Secondary line (horizontal, underneath, no special treatment) -->
+            <line x1="40" y1="120" x2="240" y2="120" stroke="#38bdf8" stroke-width="2" />
+            <!-- Secondary label -->
+            <text x="242" y="118" fill="#38bdf8" font-size="10" font-family="Inter, sans-serif" font-weight="500">次线</text>
+
+            <!-- Primary line (vertical, on top, with glow at intersection) -->
+            <line x1="140" y1="30" x2="140" y2="108" stroke="#7c6aff" stroke-width="2" filter="url(#glowXD)" />
+            <line x1="140" y1="132" x2="140" y2="210" stroke="#7c6aff" stroke-width="2" filter="url(#glowXD)" />
+            <!-- Glow segment at intersection -->
+            <line x1="140" y1="108" x2="140" y2="132" stroke="#7c6aff" stroke-width="3" filter="url(#softGlow)" />
+            <!-- Primary label -->
+            <text x="148" y="28" fill="#7c6aff" font-size="10" font-family="Inter, sans-serif" font-weight="500">主线</text>
+
+            <!-- Intersection highlight zone -->
+            <circle cx="140" cy="120" r="14" fill="none" stroke="rgba(124, 106, 255, 0.15)" stroke-width="0.5" stroke-dasharray="3 2" />
+          </svg>
+        </div>
+        <div class="card-label-area">
+          <span class="card-title">Z-顺序层级</span>
+          <p class="card-desc">主线发光覆盖在次线之上</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Bottom spacing -->
+  <div style="height: 64px;"></div>
+
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

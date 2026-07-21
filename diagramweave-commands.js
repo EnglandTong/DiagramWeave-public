@@ -2,6 +2,9 @@
   'use strict';
 
   const registry = new Map();
+  const Result = typeof global.DiagramWeaveResult !== 'undefined' && global.DiagramWeaveResult && typeof global.DiagramWeaveResult.createError === 'function'
+    ? global.DiagramWeaveResult
+    : { createError: issues => ({ success: false, data: null, issues, warnings: [] }), createSuccess: data => ({ success: true, data, issues: [], warnings: [] }) };
 
   function registerCommand(command) {
     if (!command || typeof command !== 'object') throw new TypeError('command must be an object');
@@ -40,18 +43,13 @@
 
   async function executeCommand(id, context) {
     const command = registry.get(id);
-    if (!command) return { success: false, data: null, issues: [{ code: 'COMMAND_NOT_FOUND', id }], warnings: [] };
-    if (!command.when(context)) return { success: false, data: null, issues: [{ code: 'COMMAND_DISABLED', id }], warnings: [] };
+    if (!command) return Result.createError([{ code: 'COMMAND_NOT_FOUND', id }]);
+    if (!command.when(context)) return Result.createError([{ code: 'COMMAND_DISABLED', id }]);
     try {
       const data = await command.run(context);
-      return { success: true, data: data ?? null, issues: [], warnings: [] };
+      return Result.createSuccess(data ?? null);
     } catch (error) {
-      return {
-        success: false,
-        data: null,
-        issues: [{ code: 'COMMAND_FAILED', id, message: error?.message || String(error) }],
-        warnings: [],
-      };
+      return Result.createError([{ code: 'COMMAND_FAILED', id, message: error?.message || String(error) }]);
     }
   }
 

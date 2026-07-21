@@ -4,6 +4,8 @@
   "description": "DiagramWeave - 单机 Web 流程图编辑器",
   "main": "electron/main.mjs",
   "scripts": {
+    "build": "node scripts/build.mjs",
+    "dep-graph": "node scripts/dep-graph.mjs",
     "hub": "node core-server/src/server.mjs",
     "hub:serve": "node core-server/src/server.mjs",
     "serve:legacy": "node scripts/serve.mjs",
@@ -15,7 +17,10 @@
     "setup": "node scripts/setup.mjs",
     "test": "node node_modules/vitest/vitest.mjs run",
     "test:e2e": "node scripts/test-e2e.mjs",
-    "typecheck": "node scripts/check-syntax.mjs"
+    "typecheck": "node scripts/check-syntax.mjs",
+    "lint": "node node_modules/eslint/bin/eslint.js .",
+    "lint:fix": "node node_modules/eslint/bin/eslint.js . --fix",
+    "format": "node node_modules/prettier/bin/prettier.cjs --write ."
   },
   "keywords": [],
   "author": "",
@@ -33,9 +38,13 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
-    "@playwright/test": "^1.52.0",
+    "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.60.0",
     "electron": "^42.4.0",
     "esbuild": "^0.28.1",
-    "vitest": "^3.2.4"
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0",
+    "prettier": "^3.9.5",
+    "vitest": "^3.2.6"
   }
 }

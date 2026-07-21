@@ -1,11 +1,13 @@
-﻿// VSDX compatibility layer: pages, shapes, text, coordinates, connectors, geometry, connection points, and unsupported-element reporting.
 (function (global) {
   'use strict';
+
+  const Result = typeof global.DiagramWeaveResult !== 'undefined' && global.DiagramWeaveResult && typeof global.DiagramWeaveResult.createError === 'function'
+    ? global.DiagramWeaveResult
+    : { createError: issues => ({ success: false, data: null, issues, warnings: [] }), createSuccess: data => ({ success: true, data, issues: [], warnings: [] }) };
 
   const NS = 'http://schemas.microsoft.com/office/visio/2012/main';
   const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
   const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
-  const VISIO_REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   const ZIP_LIMITS = { maxInputBytes: 32 * 1024 * 1024, maxEntries: 512, maxExpandedBytes: 128 * 1024 * 1024 };
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[char]));
   const attr = (xml, name) => {
@@ -92,13 +94,13 @@
     const entries = {
       '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="${CT_NS}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/visio/document.xml" ContentType="application/vnd.ms-visio.document.main+xml"/><Override PartName="/visio/pages/pages.xml" ContentType="application/vnd.ms-visio.pages+xml"/><Override PartName="/visio/masters/masters.xml" ContentType="application/vnd.ms-visio.masters+xml"/><Override PartName="/visio/masters/master1.xml" ContentType="application/vnd.ms-visio.master+xml"/><Override PartName="/visio/masters/master2.xml" ContentType="application/vnd.ms-visio.master+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>${overrides}</Types>`,
       '_rels/.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${REL_NS}"><Relationship Id="rId1" Type="http://schemas.microsoft.com/office/visio/2012/relationships/document" Target="visio/document.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>`,
-      'visio/document.xml': `<?xml version="1.0" encoding="UTF-8"?><VisioDocument xmlns="${NS}" xmlns:r="${VISIO_REL_NS}"><DocumentProperties><Creator>DiagramWeave</Creator></DocumentProperties><StyleSheets><StyleSheet ID="0" Name="Normal"><Cell N="CharFont" V="0"/><Cell N="CharSize" V="0.1667in"/><Cell N="LineWeight" V="0.01"/><Cell N="LineColor" V="0"/><Cell N="FillForegnd" V="0xffffff"/><Cell N="FillPattern" V="1"/><Cell N="LinePattern" V="1"/></StyleSheet></StyleSheets></VisioDocument>`,
+      'visio/document.xml': `<?xml version="1.0" encoding="UTF-8"?><VisioDocument xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><DocumentProperties><Creator>DiagramWeave</Creator></DocumentProperties><StyleSheets><StyleSheet ID="0" Name="Normal"><Cell N="CharFont" V="0"/><Cell N="CharSize" V="0.1667in"/><Cell N="LineWeight" V="0.01"/><Cell N="LineColor" V="0"/><Cell N="FillForegnd" V="0xffffff"/><Cell N="FillPattern" V="1"/><Cell N="LinePattern" V="1"/></StyleSheet></StyleSheets></VisioDocument>`,
       'visio/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${REL_NS}"><Relationship Id="rIdPages" Type="http://schemas.microsoft.com/visio/2010/relationships/pages" Target="pages/pages.xml"/><Relationship Id="rIdMasters" Type="http://schemas.microsoft.com/visio/2010/relationships/masters" Target="masters/masters.xml"/></Relationships>`,
-      'visio/pages/pages.xml': `<?xml version="1.0" encoding="UTF-8"?><Pages xmlns="${NS}" xmlns:r="${VISIO_REL_NS}">${pages.map((page, index) => `<Page ID="${index + 1}" Name="${esc(page.name || `Page ${index + 1}`)}"><Rel r:id="rId${index + 1}"/><PageSheet><Cell N="PageWidth" V="11"/><Cell N="PageHeight" V="11"/></PageSheet></Page>`).join('')}</Pages>`,
+      'visio/pages/pages.xml': `<?xml version="1.0" encoding="UTF-8"?><Pages xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${pages.map((page, index) => `<Page ID="${index + 1}" Name="${esc(page.name || `Page ${index + 1}`)}"><Rel r:id="rId${index + 1}"/><PageSheet><Cell N="PageWidth" V="11"/><Cell N="PageHeight" V="11"/></PageSheet></Page>`).join('')}</Pages>`,
       'visio/pages/_rels/pages.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${REL_NS}">${pageRels}</Relationships>`,
       'docProps/core.xml': '<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/"><dc:title>DiagramWeave</dc:title><dc:creator>DiagramWeave</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">2026-07-20</dcterms:created></cp:coreProperties>',
     };
-    entries['visio/masters/masters.xml'] = `<?xml version="1.0" encoding="UTF-8"?><Masters xmlns="${NS}" xmlns:r="${VISIO_REL_NS}"><Master ID="1" Name="Rectangle" UniqueID="{B96C27D0-E7E1-43CE-B87A-4A5B3D9D5C10}"><Rel r:id="rId1"/></Master><Master ID="2" Name="Dynamic Connector" UniqueID="{B2B3D97A-2C53-43F6-9C71-B4E8E3D94B7F}"><Rel r:id="rId2"/></Master></Masters>`;
+    entries['visio/masters/masters.xml'] = `<?xml version="1.0" encoding="UTF-8"?><Masters xmlns="${NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><Master ID="1" Name="Rectangle" UniqueID="{B96C27D0-E7E1-43CE-B87A-4A5B3D9D5C10}"><Rel r:id="rId1"/></Master><Master ID="2" Name="Dynamic Connector" UniqueID="{B2B3D97A-2C53-43F6-9C71-B4E8E3D94B7F}"><Rel r:id="rId2"/></Master></Masters>`;
     entries['visio/masters/_rels/masters.xml.rels'] = `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="${REL_NS}"><Relationship Id="rId1" Type="http://schemas.microsoft.com/visio/2010/relationships/master" Target="master1.xml"/><Relationship Id="rId2" Type="http://schemas.microsoft.com/visio/2010/relationships/master" Target="master2.xml"/></Relationships>`;
     entries['visio/masters/master1.xml'] = `<?xml version="1.0" encoding="UTF-8"?><MasterContents xmlns="${NS}"><Shapes><Shape ID="1" Type="Shape"><Cell N="Width" V="1"/><Cell N="Height" V="0.67"/><Cell N="LocPinX" F="Width*0.5"/><Cell N="LocPinY" F="Height*0.5"/><Cell N="FillForegnd" V="0xffffff"/><Cell N="LineWeight" V="0.01"/><Cell N="LinePattern" V="1"/><Cell N="FillPattern" V="1"/>${masterGeometryRect(1, 0.67)}<Text>Rectangle</Text></Shape></Shapes></MasterContents>`;
     entries['visio/masters/master2.xml'] = `<?xml version="1.0" encoding="UTF-8"?><MasterContents xmlns="${NS}"><Shapes><Shape ID="1" Type="Shape"><Cell N="Width" V="1"/><Cell N="Height" V="0.5"/><Cell N="LocPinX" F="Width*0.5"/><Cell N="LocPinY" F="Height*0.5"/><Cell N="LineColor" V="0x44546a"/><Cell N="LineWeight" V="0.01"/><Cell N="LinePattern" V="1"/>${masterLineGeometry(1, 0.5)}<Text>Connector</Text></Shape></Shapes></MasterContents>`;
@@ -167,7 +169,7 @@
 
   function parseEntries(entries, fileName = '') {
     const validation = validatePackage(entries);
-    if (!validation.valid) return { success: false, data: null, issues: [{ code: 'invalid_vsdx_package', message: `Missing OPC parts: ${validation.missing.join(', ')}` }], warnings: [] };
+    if (!validation.valid) return Result.createError([{ code: 'invalid_vsdx_package', message: `Missing OPC parts: ${validation.missing.join(', ')}` }]);
     const pagesXml = entries['visio/pages/pages.xml'];
     const pages = [];
     const allConnects = parseConnectElements(entries, pagesXml);
@@ -241,7 +243,9 @@
       delete page._unsupportedWarnings;
     }
     if (!allWarnings.length) allWarnings.push('Controlled subset: some Visio elements may not be fully editable on re-import.');
-    return { success: true, data: { version: 2, schemaVersion: 3, projectName: fileName.replace(/\.vsdx$/i, ''), currentPageId: pages[0]?.id || null, pages, sourceFormat: 'vsdx' }, issues: [], warnings: allWarnings };
+    const result = Result.createSuccess({ version: 2, schemaVersion: 3, projectName: fileName.replace(/\.vsdx$/i, ''), currentPageId: pages[0]?.id || null, pages, sourceFormat: 'vsdx' });
+    result.warnings = allWarnings;
+    return result;
   }
 
   async function loadFflate() {
@@ -252,7 +256,9 @@
 
   async function exportVsdx(document) {
     const { zipSync, strToU8 } = await loadFflate();
-    const entries = packageEntries(document);
+    const pkg = typeof global.DiagramWeaveVsdxPackager !== 'undefined' ? global.DiagramWeaveVsdxPackager : null;
+    const pkgEntries = pkg?.packageEntries || packageEntries;
+    const entries = pkgEntries(document);
     const zipped = zipSync(Object.fromEntries(Object.entries(entries).map(([name, value]) => [name, strToU8(value)])));
     return new Blob([zipped], { type: 'application/vnd.ms-visio.drawing.main+xml' });
   }
@@ -261,13 +267,17 @@
     const { unzipSync, strFromU8 } = await loadFflate();
     try {
       const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-      if (bytes.byteLength > ZIP_LIMITS.maxInputBytes) return { success: false, data: null, issues: [{ code: 'archive_too_large', message: 'VSDX archive exceeds the 32 MiB input limit' }], warnings: [] };
+      const pkg = typeof global.DiagramWeaveVsdxPackager !== 'undefined' ? global.DiagramWeaveVsdxPackager : null;
+      const validator = pkg?.validateArchiveSafety || validateArchiveSafety;
+      if (bytes.byteLength > ZIP_LIMITS.maxInputBytes) return Result.createError([{ code: 'archive_too_large', message: 'VSDX archive exceeds the 32 MiB input limit' }]);
       const files = unzipSync(bytes);
-      const safetyIssue = validateArchiveSafety(bytes, files);
-      if (safetyIssue) return { success: false, data: null, issues: [safetyIssue], warnings: [] };
-      return parseEntries(Object.fromEntries(Object.entries(files).map(([name, value]) => [name, strFromU8(value)])), fileName);
+      const safetyIssue = validator(bytes, files);
+      if (safetyIssue) return Result.createError([safetyIssue]);
+      const parser = typeof global.DiagramWeaveVsdxParser !== 'undefined' ? global.DiagramWeaveVsdxParser : null;
+      const parseFn = parser?.parseEntries || parseEntries;
+      return parseFn(Object.fromEntries(Object.entries(files).map(([name, value]) => [name, strFromU8(value)])), fileName);
     } catch (error) {
-      return { success: false, data: null, issues: [{ code: 'invalid_vsdx_zip', message: error.message }], warnings: [] };
+      return Result.createError([{ code: 'invalid_vsdx_zip', message: error.message }]);
     }
   }
 

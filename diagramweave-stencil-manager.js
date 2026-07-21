@@ -2,12 +2,17 @@
   'use strict';
 
   const STORAGE_KEY = 'dw-stencil-packs';
-  const normalize = value => String(value || '').trim();
+  const normalize = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.normalize === 'function'
+  ? global.DiagramWeaveUtils.normalize
+  : (value => String(value || '').trim());
+  const Result = typeof global.DiagramWeaveResult !== 'undefined' && global.DiagramWeaveResult && typeof global.DiagramWeaveResult.createError === 'function'
+    ? global.DiagramWeaveResult
+    : { createError: issues => ({ success: false, data: null, issues, warnings: [] }), createSuccess: data => ({ success: true, data, issues: [], warnings: [] }) };
 
   function validatePack(raw, sanitizer) {
     const issues = [];
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-      return { success: false, data: null, issues: ['Pack must be a JSON object.'], warnings: [] };
+      return Result.createError(['Pack must be a JSON object.']);
     }
     const id = normalize(raw.id || raw.packId);
     const name = normalize(raw.name || raw.label);
@@ -18,11 +23,11 @@
     if (!sanitized || sanitized.shapes.length !== (raw.shapes || []).length) issues.push('Every shape must have a unique valid id, label, and safe SVG.');
     const ids = (sanitized?.shapes || []).map(shape => shape.id);
     if (new Set(ids).size !== ids.length) issues.push('Shape ids must be unique within the pack.');
-    if (issues.length) return { success: false, data: null, issues, warnings: [] };
-    return { success: true, data: {
+    if (issues.length) return Result.createError(issues);
+    return Result.createSuccess({
       id, name: name.slice(0, 60), version: normalize(raw.version || '1').slice(0, 20), enabled: raw.enabled !== false,
       shapes: sanitized.shapes.map(shape => ({ ...shape, packId: id, category: shape.section || name })),
-    }, issues: [], warnings: [] };
+    });
   }
 
   function createStore(storage, sanitizer) {
@@ -34,7 +39,7 @@
       importPack(raw) {
         const result = validatePack(raw, sanitizer);
         if (!result.success) return result;
-        if (packs.some(pack => pack.id === result.data.id)) return { success: false, data: null, issues: [`Pack id '${result.data.id}' already exists.`], warnings: [] };
+        if (packs.some(pack => pack.id === result.data.id)) return Result.createError([`Pack id '${result.data.id}' already exists.`]);
         packs.push(result.data); persist(); return result;
       },
       setEnabled(id, enabled) { const pack = packs.find(item => item.id === id); if (!pack) return false; pack.enabled = Boolean(enabled); persist(); return true; },

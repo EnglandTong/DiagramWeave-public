@@ -1,6 +1,15 @@
 (function initDiagramWeaveImportPreview(global) {
   'use strict';
 
+  const Result = typeof global.DiagramWeaveResult !== 'undefined' && global.DiagramWeaveResult && typeof global.DiagramWeaveResult.createError === 'function'
+    ? global.DiagramWeaveResult
+    : { 
+        createError: issues => ({ success: false, data: null, issues, warnings: [] }), 
+        createSuccess: data => ({ success: true, data, issues: [], warnings: [] }),
+        addIssue: (result, issue) => { if (result && Array.isArray(result.issues)) result.issues.push(issue); return result; },
+        addWarning: (result, warning) => { if (result && Array.isArray(result.warnings)) result.warnings.push(warning); return result; }
+      };
+
   function issue(code, row, field, reason, severity = 'error') {
     return { code, severity, row, field, reason };
   }
@@ -80,16 +89,16 @@
       ? sanitizer.sanitizeFlowDocument(raw, options.sanitizeOptions)
       : raw;
     if (!document) {
-      return { success: false, data: null, issues: [...diagnostics.issues, issue('INVALID_DOCUMENT', 0, 'document', 'Document could not be parsed')], warnings: diagnostics.warnings };
+      const result = Result.createError([...diagnostics.issues, issue('INVALID_DOCUMENT', 0, 'document', 'Document could not be parsed')]);
+      result.warnings = diagnostics.warnings;
+      return result;
     }
     const summary = countDocument(document);
     summary.cycles = countCycles(document);
-    return {
-      success: true,
-      data: { document, summary, sourceType: options.sourceType || 'json' },
-      issues: diagnostics.issues,
-      warnings: diagnostics.warnings,
-    };
+    const result = Result.createSuccess({ document, summary, sourceType: options.sourceType || 'json' });
+    result.issues = diagnostics.issues;
+    result.warnings = diagnostics.warnings;
+    return result;
   }
 
   function createTabularPreview(nodeRows, connectionRows, options = {}) {
@@ -177,7 +186,9 @@
       nextId: pageList.reduce((total, page) => total + page.nodes.length + page.connections.length, 1),
     };
     const preview = createDocumentPreview(raw, { ...options, sourceType: options.sourceType || 'excel' });
-    return { ...preview, issues: [...issues, ...preview.issues], warnings: [...warnings, ...preview.warnings] };
+    preview.issues = [...issues, ...preview.issues];
+    preview.warnings = [...warnings, ...preview.warnings];
+    return preview;
   }
 
   global.DiagramWeaveImportPreview = {

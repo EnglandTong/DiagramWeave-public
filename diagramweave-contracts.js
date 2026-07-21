@@ -1,12 +1,18 @@
 (function initDiagramWeaveContracts(global) {
   'use strict';
 
+  const clone = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.clone === 'function'
+    ? global.DiagramWeaveUtils.clone
+    : (value => JSON.parse(JSON.stringify(value)));
   const CURRENT_SCHEMA_VERSION = 3;
   const REVIEW_STATUSES = Object.freeze(['pending', 'approved', 'changes_requested', 'resolved']);
+  const Result = typeof global.DiagramWeaveResult !== 'undefined' && global.DiagramWeaveResult && typeof global.DiagramWeaveResult.createError === 'function'
+    ? global.DiagramWeaveResult
+    : { createError: (issues, data) => ({ success: false, data: data ?? null, issues, warnings: [] }), createSuccess: data => ({ success: true, data, issues: [], warnings: [] }) };
 
   function migrateDocument(input) {
     const source = input && typeof input === 'object' ? input : {};
-    const migrated = JSON.parse(JSON.stringify(source));
+    const migrated = clone(source);
     const fromVersion = Number(migrated.schemaVersion || migrated.version || 1);
     if (!Array.isArray(migrated.reviewThreads)) migrated.reviewThreads = [];
     migrated.reviewThreads = migrated.reviewThreads.filter(Boolean).slice(0, 1000).map((thread, index) => ({
@@ -109,7 +115,7 @@
   function setAIEnabled(enabled) { aiGloballyEnabled = enabled === true; return aiGloballyEnabled; }
   function isAIEnabled() { return aiGloballyEnabled; }
   function createAIDataPreview(input) {
-    const value = input && typeof input === 'object' ? JSON.parse(JSON.stringify(input)) : input;
+    const value = input && typeof input === 'object' ? clone(input) : input;
     return { payload: value, bytes: JSON.stringify(value ?? null).length, fields: value && typeof value === 'object' ? Object.keys(value).sort() : [] };
   }
   function registerAIProvider(provider) {
@@ -120,11 +126,11 @@
   async function invokeAIProvider(id, input, permission) {
     const dataPreview = createAIDataPreview(input);
     const provider = aiProviders.get(id);
-    if (!aiGloballyEnabled) return { success: false, data: { preview: dataPreview }, issues: [{ code: 'AI_GLOBALLY_DISABLED' }], warnings: [] };
-    if (!provider || !provider.enabled) return { success: false, data: { preview: dataPreview }, issues: [{ code: 'AI_PROVIDER_DISABLED' }], warnings: [] };
-    if (permission !== true) return { success: false, data: { preview: dataPreview }, issues: [{ code: 'AI_PERMISSION_REQUIRED' }], warnings: [] };
-    try { const providerPreview = await provider.preview(input); return { success: true, data: { preview: dataPreview, providerPreview, result: await provider.run(input) }, issues: [], warnings: [] }; }
-    catch (error) { return { success: false, data: null, issues: [{ code: 'AI_PROVIDER_FAILED', message: error?.message || String(error) }], warnings: [] }; }
+    if (!aiGloballyEnabled) return Result.createError([{ code: 'AI_GLOBALLY_DISABLED' }], { preview: dataPreview });
+    if (!provider || !provider.enabled) return Result.createError([{ code: 'AI_PROVIDER_DISABLED' }], { preview: dataPreview });
+    if (permission !== true) return Result.createError([{ code: 'AI_PERMISSION_REQUIRED' }], { preview: dataPreview });
+    try { const providerPreview = await provider.preview(input); return Result.createSuccess({ preview: dataPreview, providerPreview, result: await provider.run(input) }); }
+    catch (error) { return Result.createError([{ code: 'AI_PROVIDER_FAILED', message: error?.message || String(error) }]); }
   }
 
   global.DiagramWeaveContracts = {

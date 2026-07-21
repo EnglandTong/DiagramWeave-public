@@ -1,0 +1,22 @@
+# 依賴與構建產物
+node_modules/
+.pnpm-store/
+
+# 第三方 vendor（已鎖定版本，不格式化）
+vendor/
+
+# 歸檔與產物
+archive/
+audit-results/
+playwright-results/
+
+# 設計草稿（非活躍源）
+diagramweave-ui-redesign/
+diagramweave-ui-redesign-draft/
+diagramweave-ui-redesign-draft2/
+diagramweave-ui-redesign-draft3/
+
+# 日誌與臨時
+*.log
+nul
+.DiagramWeave*/

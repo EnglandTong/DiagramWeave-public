@@ -10,11 +10,22 @@
       : { mixed: true, value: null };
   }
 
+  const normalizeHex = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.normalizeHex === 'function'
+    ? global.DiagramWeaveUtils.normalizeHex
+    : (color => {
+        if (typeof color !== 'string') return null;
+        const hex = color.trim().toLowerCase();
+        if (/^#[0-9a-f]{6}$/.test(hex)) return hex;
+        if (/^#[0-9a-f]{3}$/.test(hex)) {
+          return '#' + hex.slice(1).split('').map(char => char + char).join('');
+        }
+        return null;
+      });
+
   function normalizeColor(value, allowAuto = false) {
     const raw = String(value || '').trim().toLowerCase();
     if (allowAuto && raw === 'auto') return 'auto';
-    if (/^#[0-9a-f]{3}$/.test(raw)) return `#${raw.slice(1).split('').map(char => char + char).join('')}`;
-    return /^#[0-9a-f]{6}$/.test(raw) ? raw : null;
+    return normalizeHex(raw);
   }
 
   function createBatchPatches(nodes, field, value) {

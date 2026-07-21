@@ -1,0 +1,387 @@
+{
+  "generatedAt": "2026-07-20T16:12:33.735Z",
+  "moduleCount": 24,
+  "dependencyCount": 18,
+  "modules": [
+    {
+      "id": "bootstrap",
+      "file": "diagramweave-bootstrap.js",
+      "exports": [
+        "DiagramWeaveBootstrap",
+        "DiagramWeaveUtils.compareVersions"
+      ],
+      "dependencies": [
+        "DiagramWeaveBootstrap",
+        "DiagramWeaveContent",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "canvas-tools",
+      "file": "diagramweave-canvas-tools.js",
+      "exports": [
+        "DiagramWeaveCanvasTools"
+      ],
+      "dependencies": [
+        "DiagramWeaveCanvasTools"
+      ]
+    },
+    {
+      "id": "commands",
+      "file": "diagramweave-commands.js",
+      "exports": [
+        "DiagramWeave",
+        "DiagramWeave.commands",
+        "DiagramWeaveResult.createError"
+      ],
+      "dependencies": [
+        "DiagramWeaveResult"
+      ]
+    },
+    {
+      "id": "content-pack",
+      "file": "diagramweave-content-pack.js",
+      "exports": [
+        "DiagramWeaveContent"
+      ],
+      "dependencies": [
+        "DiagramWeaveBootstrap",
+        "DiagramWeaveContent",
+        "DiagramWeaveSvgSanitizer"
+      ]
+    },
+    {
+      "id": "contracts",
+      "file": "diagramweave-contracts.js",
+      "exports": [
+        "DiagramWeaveContracts",
+        "DiagramWeaveResult.createError",
+        "DiagramWeaveUtils.clone"
+      ],
+      "dependencies": [
+        "DiagramWeaveContracts",
+        "DiagramWeaveResult",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "extension-kernel",
+      "file": "diagramweave-extension-kernel.js",
+      "exports": [
+        "DiagramWeaveExtensionKernel",
+        "DiagramWeaveResult.createError"
+      ],
+      "dependencies": [
+        "DiagramWeaveExport",
+        "DiagramWeaveExtensionKernel",
+        "DiagramWeaveImportPreview",
+        "DiagramWeaveResult",
+        "DiagramWeaveSanitize"
+      ]
+    },
+    {
+      "id": "external-importers",
+      "file": "diagramweave-external-importers.js",
+      "exports": [],
+      "dependencies": []
+    },
+    {
+      "id": "field-mapping",
+      "file": "diagramweave-field-mapping.js",
+      "exports": [
+        "DiagramWeaveFieldMapping"
+      ],
+      "dependencies": [
+        "DiagramWeaveFieldMapping"
+      ]
+    },
+    {
+      "id": "history",
+      "file": "diagramweave-history.js",
+      "exports": [
+        "DiagramWeaveHistory",
+        "DiagramWeaveUtils.clone"
+      ],
+      "dependencies": [
+        "DiagramWeaveHistory",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "i18n",
+      "file": "diagramweave-i18n.js",
+      "exports": [
+        "DiagramWeaveI18n"
+      ],
+      "dependencies": [
+        "DiagramWeaveI18n"
+      ]
+    },
+    {
+      "id": "import-preview",
+      "file": "diagramweave-import-preview.js",
+      "exports": [
+        "DiagramWeaveImportPreview",
+        "DiagramWeaveResult.createError"
+      ],
+      "dependencies": [
+        "DiagramWeaveImportPreview",
+        "DiagramWeaveResult",
+        "DiagramWeaveSanitize"
+      ]
+    },
+    {
+      "id": "node-colors",
+      "file": "diagramweave-node-colors.js",
+      "exports": [
+        "DiagramWeaveNodeColors",
+        "DiagramWeaveUtils.normalizeHex"
+      ],
+      "dependencies": [
+        "DiagramWeaveNodeColors",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "offline-viewer",
+      "file": "diagramweave-offline-viewer.js",
+      "exports": [],
+      "dependencies": []
+    },
+    {
+      "id": "process-analysis",
+      "file": "diagramweave-process-analysis.js",
+      "exports": [],
+      "dependencies": []
+    },
+    {
+      "id": "property-tools",
+      "file": "diagramweave-property-tools.js",
+      "exports": [
+        "DiagramWeavePropertyTools",
+        "DiagramWeaveUtils.normalizeHex"
+      ],
+      "dependencies": [
+        "DiagramWeavePropertyTools",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "result",
+      "file": "diagramweave-result.js",
+      "exports": [
+        "DiagramWeaveResult"
+      ],
+      "dependencies": [
+        "DiagramWeaveResult"
+      ]
+    },
+    {
+      "id": "routing-rules",
+      "file": "diagramweave-routing-rules.js",
+      "exports": [
+        "DiagramWeaveRoutingRules"
+      ],
+      "dependencies": [
+        "DiagramWeaveRoutingRules"
+      ]
+    },
+    {
+      "id": "shape-library",
+      "file": "diagramweave-shape-library.js",
+      "exports": [
+        "DiagramWeaveShapeLibrary",
+        "DiagramWeaveUtils.normalize"
+      ],
+      "dependencies": [
+        "DiagramWeaveShapeLibrary",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "stencil-manager",
+      "file": "diagramweave-stencil-manager.js",
+      "exports": [
+        "DiagramWeaveResult.createError",
+        "DiagramWeaveStencilManager",
+        "DiagramWeaveUtils.normalize"
+      ],
+      "dependencies": [
+        "DiagramWeaveResult",
+        "DiagramWeaveStencilManager",
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "svg-sanitizer",
+      "file": "diagramweave-svg-sanitizer.js",
+      "exports": [
+        "DiagramWeaveSvgSanitizer"
+      ],
+      "dependencies": [
+        "DiagramWeaveSvgSanitizer"
+      ]
+    },
+    {
+      "id": "template-center",
+      "file": "diagramweave-template-center.js",
+      "exports": [
+        "DiagramWeaveTemplateCenter"
+      ],
+      "dependencies": [
+        "DiagramWeaveTemplateCenter"
+      ]
+    },
+    {
+      "id": "utils",
+      "file": "diagramweave-utils.js",
+      "exports": [
+        "DiagramWeaveUtils"
+      ],
+      "dependencies": [
+        "DiagramWeaveUtils"
+      ]
+    },
+    {
+      "id": "visio-bridge",
+      "file": "diagramweave-visio-bridge.js",
+      "exports": [
+        "DiagramWeaveResult.createError",
+        "DiagramWeaveVisioBridge"
+      ],
+      "dependencies": [
+        "DiagramWeaveResult",
+        "DiagramWeaveVisioBridge",
+        "DiagramWeaveVsdxPackager",
+        "DiagramWeaveVsdxParser"
+      ]
+    },
+    {
+      "id": "visio-preview",
+      "file": "diagramweave-visio-preview.js",
+      "exports": [
+        "DiagramWeaveExtensionKernel.registerHandler",
+        "DiagramWeaveVisioPreview"
+      ],
+      "dependencies": [
+        "DiagramWeaveExtensionKernel",
+        "DiagramWeaveVisioPreview"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "from": "bootstrap",
+      "to": "content-pack",
+      "dependency": "DiagramWeaveContent"
+    },
+    {
+      "from": "bootstrap",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "commands",
+      "to": "visio-bridge",
+      "dependency": "DiagramWeaveResult"
+    },
+    {
+      "from": "content-pack",
+      "to": "bootstrap",
+      "dependency": "DiagramWeaveBootstrap"
+    },
+    {
+      "from": "content-pack",
+      "to": "svg-sanitizer",
+      "dependency": "DiagramWeaveSvgSanitizer"
+    },
+    {
+      "from": "contracts",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "contracts",
+      "to": "visio-bridge",
+      "dependency": "DiagramWeaveResult"
+    },
+    {
+      "from": "extension-kernel",
+      "to": "import-preview",
+      "dependency": "DiagramWeaveImportPreview"
+    },
+    {
+      "from": "extension-kernel",
+      "to": "visio-bridge",
+      "dependency": "DiagramWeaveResult"
+    },
+    {
+      "from": "extension-kernel",
+      "to": "visio-preview",
+      "dependency": "DiagramWeaveExtensionKernel"
+    },
+    {
+      "from": "history",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "import-preview",
+      "to": "visio-bridge",
+      "dependency": "DiagramWeaveResult"
+    },
+    {
+      "from": "node-colors",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "property-tools",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "result",
+      "to": "visio-bridge",
+      "dependency": "DiagramWeaveResult"
+    },
+    {
+      "from": "shape-library",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "stencil-manager",
+      "to": "utils",
+      "dependency": "DiagramWeaveUtils"
+    },
+    {
+      "from": "stencil-manager",
+      "to": "visio-bridge",
+      "dependency": "DiagramWeaveResult"
+    }
+  ],
+  "exportMap": {
+    "DiagramWeaveBootstrap": "bootstrap",
+    "DiagramWeaveUtils": "utils",
+    "DiagramWeaveCanvasTools": "canvas-tools",
+    "DiagramWeave": "commands",
+    "DiagramWeaveResult": "visio-bridge",
+    "DiagramWeaveContent": "content-pack",
+    "DiagramWeaveContracts": "contracts",
+    "DiagramWeaveExtensionKernel": "visio-preview",
+    "DiagramWeaveFieldMapping": "field-mapping",
+    "DiagramWeaveHistory": "history",
+    "DiagramWeaveI18n": "i18n",
+    "DiagramWeaveImportPreview": "import-preview",
+    "DiagramWeaveNodeColors": "node-colors",
+    "DiagramWeavePropertyTools": "property-tools",
+    "DiagramWeaveRoutingRules": "routing-rules",
+    "DiagramWeaveShapeLibrary": "shape-library",
+    "DiagramWeaveStencilManager": "stencil-manager",
+    "DiagramWeaveSvgSanitizer": "svg-sanitizer",
+    "DiagramWeaveTemplateCenter": "template-center",
+    "DiagramWeaveVisioBridge": "visio-bridge",
+    "DiagramWeaveVisioPreview": "visio-preview"
+  }
+}

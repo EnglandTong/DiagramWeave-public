@@ -88,23 +88,25 @@
     });
   }
 
-  function compareVersions(a, b) {
-    const pa = parseVersionParts(a);
-    const pb = parseVersionParts(b);
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i++) {
-      const x = pa[i] ?? 0;
-      const y = pb[i] ?? 0;
-      if (typeof x === 'number' && typeof y === 'number') {
-        if (x !== y) return x > y ? 1 : -1;
-      } else {
-        const xs = String(x);
-        const ys = String(y);
-        if (xs !== ys) return xs > ys ? 1 : -1;
-      }
-    }
-    return 0;
-  }
+  const compareVersions = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.compareVersions === 'function'
+    ? global.DiagramWeaveUtils.compareVersions
+    : function(a, b) {
+        const pa = parseVersionParts(a);
+        const pb = parseVersionParts(b);
+        const len = Math.max(pa.length, pb.length);
+        for (let i = 0; i < len; i++) {
+          const x = pa[i] ?? 0;
+          const y = pb[i] ?? 0;
+          if (typeof x === 'number' && typeof y === 'number') {
+            if (x !== y) return x > y ? 1 : -1;
+          } else {
+            const xs = String(x);
+            const ys = String(y);
+            if (xs !== ys) return xs > ys ? 1 : -1;
+          }
+        }
+        return 0;
+      };
 
   function getUpdateSettings() {
     return {

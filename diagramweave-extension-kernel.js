@@ -5,6 +5,10 @@
 (function (global) {
   'use strict';
 
+  const Result = typeof global.DiagramWeaveResult !== 'undefined' && global.DiagramWeaveResult && typeof global.DiagramWeaveResult.createError === 'function'
+    ? global.DiagramWeaveResult
+    : { createError: issues => ({ success: false, data: null, issues, warnings: [] }), createSuccess: data => ({ success: true, data, issues: [], warnings: [] }) };
+
   const HANDLERS = new Map();
   const EXTENSIONS = new Map();
   const EXTENSION_KINDS = new Set([
@@ -65,24 +69,13 @@
   }
 
   function invokeExtension(operationId, input) {
-    const warnings = [];
     if (!operationId || typeof operationId !== 'string') {
-      return {
-        success: false,
-        data: null,
-        issues: [{ code: 'invalid_operation', message: 'operationId required' }],
-        warnings,
-      };
+      return Result.createError([{ code: 'invalid_operation', message: 'operationId required' }]);
     }
 
     const handler = HANDLERS.get(operationId);
     if (!handler) {
-      return {
-        success: false,
-        data: null,
-        issues: [{ code: 'unknown_operation', message: `Unknown operation: ${operationId}` }],
-        warnings,
-      };
+      return Result.createError([{ code: 'unknown_operation', message: `Unknown operation: ${operationId}` }]);
     }
 
     try {
@@ -92,17 +85,12 @@
           success: result.success,
           data: result.data ?? null,
           issues: Array.isArray(result.issues) ? result.issues : [],
-          warnings: Array.isArray(result.warnings) ? result.warnings : warnings,
+          warnings: Array.isArray(result.warnings) ? result.warnings : [],
         };
       }
-      return { success: true, data: result, issues: [], warnings };
+      return Result.createSuccess(result);
     } catch (err) {
-      return {
-        success: false,
-        data: null,
-        issues: [{ code: 'handler_error', message: err?.message || String(err) }],
-        warnings,
-      };
+      return Result.createError([{ code: 'handler_error', message: err?.message || String(err) }]);
     }
   }
 
@@ -113,9 +101,9 @@
         const resolved = await result.data;
         return resolved && typeof resolved.success === 'boolean' ? {
           success: resolved.success, data: resolved.data ?? null, issues: Array.isArray(resolved.issues) ? resolved.issues : [], warnings: Array.isArray(resolved.warnings) ? resolved.warnings : [],
-        } : { success: true, data: resolved, issues: result.issues, warnings: result.warnings };
+        } : Result.createSuccess(resolved);
       } catch (error) {
-        return { success: false, data: null, issues: [{ code: 'handler_error', message: error?.message || String(error) }], warnings: [] };
+        return Result.createError([{ code: 'handler_error', message: error?.message || String(error) }]);
       }
     }
     return result;
@@ -125,29 +113,19 @@
     registerHandler('sanitize.document', (input) => {
       const S = global.DiagramWeaveSanitize;
       if (!S || typeof S.sanitizeFlowDocument !== 'function') {
-        return {
-          success: false,
-          data: null,
-          issues: [{ code: 'dependency_missing', message: 'DiagramWeaveSanitize unavailable' }],
-          warnings: [],
-        };
+        return Result.createError([{ code: 'dependency_missing', message: 'DiagramWeaveSanitize unavailable' }]);
       }
       const data = S.sanitizeFlowDocument(input?.raw, input?.options);
       if (!data) {
-        return {
-          success: false,
-          data: null,
-          issues: [{ code: 'sanitize_rejected', message: 'Document rejected by sanitizer' }],
-          warnings: [],
-        };
+        return Result.createError([{ code: 'sanitize_rejected', message: 'Document rejected by sanitizer' }]);
       }
-      return { success: true, data, issues: [], warnings: [] };
+      return Result.createSuccess(data);
     });
 
     registerHandler('import.preview.document', (input) => {
       const preview = global.DiagramWeaveImportPreview;
       if (!preview?.createDocumentPreview) {
-        return { success: false, data: null, issues: [{ code: 'dependency_missing', message: 'DiagramWeaveImportPreview unavailable' }], warnings: [] };
+        return Result.createError([{ code: 'dependency_missing', message: 'DiagramWeaveImportPreview unavailable' }]);
       }
       return preview.createDocumentPreview(input?.raw, {
         sourceType: input?.sourceType,
@@ -158,7 +136,7 @@
     registerHandler('import.preview.tabular', (input) => {
       const preview = global.DiagramWeaveImportPreview;
       if (!preview?.createTabularPreview) {
-        return { success: false, data: null, issues: [{ code: 'dependency_missing', message: 'DiagramWeaveImportPreview unavailable' }], warnings: [] };
+        return Result.createError([{ code: 'dependency_missing', message: 'DiagramWeaveImportPreview unavailable' }]);
       }
       return preview.createTabularPreview(input?.nodes, input?.connections, { sourceType: input?.sourceType || 'excel' });
     });
@@ -166,24 +144,14 @@
     registerHandler('export.nodeShape', (input) => {
       const E = global.DiagramWeaveExport;
       if (!E || typeof E.buildExportNodeShapeSvg !== 'function') {
-        return {
-          success: false,
-          data: null,
-          issues: [{ code: 'dependency_missing', message: 'DiagramWeaveExport unavailable' }],
-          warnings: [],
-        };
+        return Result.createError([{ code: 'dependency_missing', message: 'DiagramWeaveExport unavailable' }]);
       }
       const node = input?.node;
       if (!node || typeof node !== 'object') {
-        return {
-          success: false,
-          data: null,
-          issues: [{ code: 'invalid_input', message: 'node object required' }],
-          warnings: [],
-        };
+        return Result.createError([{ code: 'invalid_input', message: 'node object required' }]);
       }
       const svg = E.buildExportNodeShapeSvg(node);
-      return { success: true, data: { svg }, issues: [], warnings: [] };
+      return Result.createSuccess({ svg });
     });
   }
 

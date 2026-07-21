@@ -4,7 +4,9 @@
   const STORE_NAME = 'snapshots';
   const DEFAULT_LIMIT = 50;
   const DEFAULT_BYTES = 20 * 1024 * 1024;
-  const clone = value => JSON.parse(JSON.stringify(value));
+  const clone = typeof global.DiagramWeaveUtils !== 'undefined' && global.DiagramWeaveUtils && typeof global.DiagramWeaveUtils.clone === 'function'
+  ? global.DiagramWeaveUtils.clone
+  : (value => JSON.parse(JSON.stringify(value)));
 
   function createMemoryStore(options = {}) {
     const limit = options.limit || DEFAULT_LIMIT; const maxBytes = options.maxBytes || DEFAULT_BYTES; let rows = [];
