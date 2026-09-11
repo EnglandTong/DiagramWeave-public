@@ -92,6 +92,15 @@ async function main() {
     console.log('Copied vendor files');
   }
 
+  // Copy PWA files (manifest, service worker, icons)
+  const publicDir = join(root, 'public');
+  if (existsSync(publicDir)) {
+    for (const f of readdirSync(publicDir)) {
+      copyFileSync(join(publicDir, f), join(distDir, f));
+    }
+    console.log('Copied PWA files from public/');
+  }
+
   const uiRedesignDir = join(root, 'diagramweave-ui-redesign');
   const distUiRedesignDir = join(distDir, 'diagramweave-ui-redesign');
   if (existsSync(uiRedesignDir)) {
@@ -136,6 +145,10 @@ async function main() {
   const distHtmlPath = join(distDir, 'flowchart-editor.html');
   writeFileSync(distHtmlPath, newHtmlContent, 'utf-8');
   console.log('Wrote flowchart-editor.html');
+
+  // Capacitor 壳要求入口文件为 index.html，复制一份
+  copyFileSync(distHtmlPath, join(distDir, 'index.html'));
+  console.log('Wrote index.html (Capacitor entry)');
 
   const manifestFile = join(root, 'diagramweave.manifest.json');
   if (existsSync(manifestFile)) {

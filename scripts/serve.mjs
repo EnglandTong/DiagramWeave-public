@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.env.PORT) || 4173;
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -35,11 +35,29 @@ const MIME = {
 function safePath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split('?')[0]);
   if (!decoded.startsWith('/')) return null;
-  const rel = decoded === '/' ? '/flowchart-editor.html' : decoded;
+  // PWA + Capacitor: '/' 和 '/index.html' 优先返回 build 产物，否则用源码入口
+  let rel = decoded;
+  if (decoded === '/' || decoded === '/index.html') {
+    const distIdx = path.resolve(ROOT, 'dist', 'index.html');
+    const rootIdx = path.resolve(ROOT, 'index.html');
+    if (fs.existsSync(distIdx)) {
+      rel = '/dist/index.html';
+    } else if (fs.existsSync(rootIdx)) {
+      rel = '/index.html';
+    } else {
+      rel = '/flowchart-editor.html';
+    }
+  }
   if (/[\\]/.test(rel) || rel.includes('..')) return null;
   const resolved = path.resolve(ROOT, '.' + rel);
   const relative = path.relative(ROOT, resolved);
   if (relative.startsWith('..') || relative.includes(':')) return null;
+
+  // Fallback: ROOT 下找不到文件时，去 dist/ 下找（PWA manifest/sw/icons 在 build 产物里）
+  if (!fs.existsSync(resolved)) {
+    const distFallback = path.resolve(ROOT, 'dist', '.' + rel);
+    if (fs.existsSync(distFallback)) return distFallback;
+  }
   return resolved;
 }
 

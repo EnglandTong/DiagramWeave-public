@@ -7,6 +7,13 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%232563eb'/%3E%3Cpath d='M18 16h12v12H18zM34 36h12v12H34zM30 22h8v20h-8z' fill='none' stroke='white' stroke-width='5' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="diagramweave-ui-redesign/colors_and_type.css">
 <link rel="stylesheet" href="flowchart-editor.css">
+  <!-- PWA manifest -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="DiagramWeave">
+  <link rel="apple-touch-icon" href="./icon-512.svg">
 </head>
 <body>
 
@@ -949,6 +956,14 @@
       </select>
     </label>
     <label class="settings-field">
+      <span data-i18n="dialog.settings.theme">主题 / Theme</span>
+      <select id="settingsTheme" onchange="applyTheme(this.value); saveSettingsFromDialog()">
+        <option value="dark" data-i18n="dialog.settings.themeDark">深色 / Dark</option>
+        <option value="light" data-i18n="dialog.settings.themeLight">浅色 / Light</option>
+        <option value="system" data-i18n="dialog.settings.themeSystem">跟随系统 / System</option>
+      </select>
+    </label>
+    <label class="settings-field">
       <span data-i18n="dialog.settings.projectName">Project Name</span>
       <input type="text" id="settingsProjectName" maxlength="80" autocomplete="off">
     </label>
@@ -1143,15 +1158,47 @@
 <script src="vsdx-parser.js"></script>
 <script src="vsdx-packager.js"></script>
 <script src="diagramweave-visio-bridge.js"></script>
+<script src="editor/editor-state.js"></script>
+<script src="editor/node-lifecycle.js"></script>
+<script src="editor/canvas-interaction.js"></script>
+<script src="editor/group-container.js"></script>
+<script src="editor/align-guides.js"></script>
+<script src="editor/property-panel-ui.js"></script>
+<script src="editor/connection-engine.js"></script>
+<script src="editor/presentation-mode.js"></script>
+<script src="editor/data-io.js"></script>
+<script src="editor/layout-engine.js"></script>
+<script src="editor/flow-table.js"></script>
+<script src="editor/export-renderers.js"></script>
+<script src="editor/ui-utils.js"></script>
+<script src="editor/templates.js"></script>
+<script src="editor/shape-library.js"></script>
+<script src="editor/command-palette.js"></script>
+<script src="editor/viewport-nav.js"></script>
+<script src="editor/accessibility.js"></script>
+<script src="editor/import-preview.js"></script>
+<script src="editor/inspector-panels.js"></script>
+<script src="editor/panel-extras.js"></script>
+<script src="editor/connection-editing.js"></script>
 <script src="editor/canvas-renderer.js"></script>
 <script src="editor/property-panel.js"></script>
 <script src="editor/state-utils.js"></script>
 <script src="editor/text-utils.js"></script>
 <script src="editor/overlay-utils.js"></script>
 <script src="editor/command-system.js"></script>
+<script src="editor/keyboard-shortcuts.js"></script>
 <script src="diagramweave-utils.js"></script>
 <script src="flowchart-extensions.js"></script>
+<script src="diagramweave-visio-stencils.js"></script>
 <script src="diagramweave-result.js"></script>
 <script src="flowchart-editor.js"></script>
+<!-- PWA Service Worker -->
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>

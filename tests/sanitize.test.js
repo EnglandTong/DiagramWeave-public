@@ -136,4 +136,113 @@ describe('DiagramWeaveSanitize', () => {
     expect(S.sanitizeHexColor('#AABBCC')).toBe('#aabbcc');
     expect(S.sanitizeHexColor('not-a-color', '#123456')).toBe('#123456');
   });
+
+  // ===== Phase 2：组合 / 容器 / 泳道集持久化白名单 =====
+  it('preserves valid group/container/swimlane references on nodes', () => {
+    const result = S.sanitizeFlowDocument({
+      version: 2,
+      pages: [{
+        id: 'p1',
+        nodes: [
+          { id: 'c1', shape: 'rectangle', label: 'Container', isContainer: true },
+          { id: 'n1', shape: 'rectangle', label: 'A', groupId: 'g1', containerId: 'c1', swimlaneSetId: 'ls1' },
+          { id: 'n2', shape: 'rectangle', label: 'B', groupId: 'g1' },
+        ],
+        connections: [],
+        groups: [{ id: 'g1', name: '分组 1' }],
+        swimlaneSets: [{ id: 'ls1', name: '主泳道', lanes: ['研发', '测试'] }],
+      }],
+    });
+    const page = result.pages[0];
+    const n1 = page.nodes.find(n => n.id === 'n1');
+    expect(n1.groupId).toBe('g1');
+    expect(n1.containerId).toBe('c1');
+    expect(n1.swimlaneSetId).toBe('ls1');
+    expect(page.nodes.find(n => n.id === 'c1').isContainer).toBe(true);
+    expect(page.groups).toEqual([{ id: 'g1', name: '分组 1' }]);
+    expect(page.swimlaneSets).toEqual([{ id: 'ls1', name: '主泳道', lanes: ['研发', '测试'] }]);
+  });
+
+  it('drops dangling groupId/containerId/swimlaneSetId references', () => {
+    const result = S.sanitizeFlowDocument({
+      version: 2,
+      pages: [{
+        id: 'p1',
+        nodes: [
+          { id: 'n1', shape: 'rectangle', label: 'A', groupId: 'ghost', containerId: 'ghost', swimlaneSetId: 'ghost' },
+          { id: 'n2', shape: 'rectangle', label: 'B', containerId: 'n1' },
+          { id: 'n3', shape: 'rectangle', label: 'C', containerId: 'n3' },
+        ],
+        connections: [],
+      }],
+    });
+    const page = result.pages[0];
+    const n1 = page.nodes.find(n => n.id === 'n1');
+    expect(n1.groupId).toBeUndefined();
+    expect(n1.containerId).toBeUndefined();
+    expect(n1.swimlaneSetId).toBeUndefined();
+    // n2 指向非容器节点 → 清除；n3 自引用 → 清除
+    expect(page.nodes.find(n => n.id === 'n2').containerId).toBeUndefined();
+    expect(page.nodes.find(n => n.id === 'n3').containerId).toBeUndefined();
+    expect(page.groups).toEqual([]);
+    expect(page.swimlaneSets).toEqual([]);
+  });
+
+  it('breaks container reference cycles', () => {
+    const result = S.sanitizeFlowDocument({
+      version: 2,
+      pages: [{
+        id: 'p1',
+        nodes: [
+          { id: 'a', shape: 'rectangle', label: 'A', isContainer: true, containerId: 'b' },
+          { id: 'b', shape: 'rectangle', label: 'B', isContainer: true, containerId: 'a' },
+          { id: 'c', shape: 'rectangle', label: 'C', containerId: 'a' },
+        ],
+        connections: [],
+      }],
+    });
+    const page = result.pages[0];
+    const withContainer = page.nodes.filter(n => n.containerId);
+    // 环上至少一处被切断，且剩余引用不构成环
+    expect(page.nodes.find(n => n.id === 'a').containerId === 'b'
+      && page.nodes.find(n => n.id === 'b').containerId === 'a').toBe(false);
+    withContainer.forEach(n => {
+      const seen = new Set([n.id]);
+      let cur = page.nodes.find(x => x.id === n.containerId);
+      while (cur && cur.containerId) {
+        expect(seen.has(cur.id)).toBe(false);
+        seen.add(cur.id);
+        cur = page.nodes.find(x => x.id === cur.containerId);
+      }
+    });
+  });
+
+  it('dedupes page-level groups and swimlaneSets by id', () => {
+    const result = S.sanitizeFlowDocument({
+      version: 2,
+      pages: [{
+        id: 'p1',
+        nodes: [{ id: 'n1', shape: 'rectangle', label: 'A' }],
+        connections: [],
+        groups: [{ id: 'g1', name: '一' }, { id: 'g1', name: '重复' }, '<bad>'],
+        swimlaneSets: [{ id: 'ls1', name: 'S', lanes: ['a', 'b'] }, { id: 'ls1', name: 'dup' }],
+      }],
+    });
+    const page = result.pages[0];
+    expect(page.groups).toEqual([{ id: 'g1', name: '一' }]);
+    expect(page.swimlaneSets).toEqual([{ id: 'ls1', name: 'S', lanes: ['a', 'b'] }]);
+  });
+
+  it('round-trips groups and swimlaneSets through v1 documents', () => {
+    const result = S.sanitizeFlowDocument({
+      nodes: [{ id: 'n1', shape: 'rectangle', label: 'A', groupId: 'g1' }],
+      connections: [],
+      groups: [{ id: 'g1', name: 'G' }],
+      swimlaneSets: [{ id: 'ls1', name: 'L', lanes: [] }],
+    });
+    expect(result.version).toBe(1);
+    expect(result.groups).toEqual([{ id: 'g1', name: 'G' }]);
+    expect(result.swimlaneSets).toEqual([{ id: 'ls1', name: 'L', lanes: [] }]);
+    expect(result.nodes[0].groupId).toBe('g1');
+  });
 });

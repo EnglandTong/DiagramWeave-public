@@ -28,6 +28,8 @@
   "packageManager": "pnpm@11.5.2",
   "type": "module",
   "dependencies": {
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "bpmn-moddle": "^10.0.0",
     "dagre": "^0.8.5",
     "fflate": "^0.8.3",
@@ -38,6 +40,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
+    "@capacitor/cli": "^8.5.0",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.60.0",
     "electron": "^42.4.0",

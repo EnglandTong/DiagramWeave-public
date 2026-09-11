@@ -60,6 +60,89 @@
     return pageConnections;
   }
 
+  function parsePageNodes(pageText) {
+    const nodes = [];
+    const connectorShapes = new Set();
+    const shapeRe = /<Shape\b([\s\S]*?)<\/Shape>/gi;
+    let shapeMatch;
+
+    while ((shapeMatch = shapeRe.exec(pageText))) {
+      const xml = shapeMatch[0];
+      const id = attr(shapeMatch[1], 'ID');
+      const type = attr(shapeMatch[1], 'Type') || 'Shape';
+      if (type === 'Group' || type === 'Foreign') continue;
+
+      const numId = Number(id);
+      const masterId = attr(shapeMatch[1], 'Master');
+      const isConnector = masterId === '2' ||
+        /Dynamic Connector/i.test(xml) ||
+        (/<Cell\b[^>]*N="BeginX"[^>]*F="/i.test(xml) && /<Cell\b[^>]*N="EndX"[^>]*F="/i.test(xml)) ||
+        /<Connect\b[^>]*FromSheet="${numId}"/i.test(pageText);
+
+      if (isConnector) {
+        connectorShapes.add(String(numId));
+        continue;
+      }
+
+      const width = cell(xml, 'Width', 1) * 96;
+      const height = cell(xml, 'Height', 0.67) * 96;
+      nodes.push({
+        id: `visio_${id}`,
+        label: textOf(xml),
+        x: Math.max(0, (cell(xml, 'PinX', 1) - width / 192) * 96),
+        y: Math.max(0, (11 - cell(xml, 'PinY', 1) - height / 192) * 96),
+        w: width,
+        h: height,
+        shape: /LaneType/.test(xml) ? 'swimlane' : 'rectangle',
+        textColor: 'auto'
+      });
+    }
+
+    return { nodes, connectorShapes };
+  }
+
+  function buildConnectionsFromConnects(pageConnects, connectorShapes, pageText, entries, pageIndex) {
+    const connections = [];
+    const edgeMap = new Map();
+    for (const connect of pageConnects) {
+      if (!connectorShapes.has(connect.fromSheet)) continue;
+      const key = connect.fromSheet;
+      if (!edgeMap.has(key)) edgeMap.set(key, { connectorId: key, endpoints: [] });
+      edgeMap.get(key).endpoints.push({ toSheet: connect.toSheet, fromCell: connect.fromCell });
+    }
+
+    for (const [connectorId, edge] of edgeMap) {
+      const sorted = edge.endpoints.sort((a, b) => a.fromCell.localeCompare(b.fromCell));
+      if (sorted.length >= 2) {
+        const beginTarget = sorted.find((ep) => /Begin/i.test(ep.fromCell)) || sorted[0];
+        const endTarget = sorted.find((ep) => /End/i.test(ep.fromCell)) || sorted[1];
+        const connectorXml = entries[`visio/pages/page${pageIndex}.xml`] || '';
+        const connectorShapeRe = new RegExp(`<Shape\\b[^>]*ID="${connectorId}"[^>]*>[\\s\\S]*?<\\/Shape>`, 'i');
+        const connectorShapeMatch = connectorShapeRe.exec(connectorXml);
+        const edgeLabel = connectorShapeMatch ? textOf(connectorShapeMatch[0]) : '';
+        connections.push({ id: `visio_edge_${connectorId}`, from: `visio_${beginTarget.toSheet}`, to: `visio_${endTarget.toSheet}`, label: edgeLabel });
+      }
+    }
+
+    return connections;
+  }
+
+  function detectFormulaConnections(pageText) {
+    const connections = [];
+    const shapeRe = /<Shape\b([\s\S]*?)<\/Shape>/gi;
+    let shapeMatch;
+    while ((shapeMatch = shapeRe.exec(pageText))) {
+      const xml = shapeMatch[0];
+      const id = Number(attr(shapeMatch[1], 'ID'));
+      const master = attr(shapeMatch[1], 'Master');
+      if (master !== '2' && !/Dynamic Connector/i.test(xml)) continue;
+      const begin = /BeginX[^>]*F="Sheet\.(\d+)!/i.exec(xml);
+      const end = /EndX[^>]*F="Sheet\.(\d+)!/i.exec(xml);
+      if (begin && end) connections.push({ id: `visio_edge_${id}`, from: `visio_${begin[1]}`, to: `visio_${end[1]}`, label: textOf(xml) });
+    }
+    return connections;
+  }
+
   function parseEntries(entries, fileName = '') {
     const parser = typeof global.DiagramWeaveVsdxParser !== 'undefined' ? global.DiagramWeaveVsdxParser : null;
     const packager = typeof global.DiagramWeaveVsdxPackager !== 'undefined' ? global.DiagramWeaveVsdxPackager : null;
@@ -78,78 +161,15 @@
       const pageId = attr(pageMatch[1], 'ID');
       const pageIndex = Number(pageId) || pages.length + 1;
       const pageText = entries[`visio/pages/page${pageIndex}.xml`] || '';
-      const nodes = [];
-      const connections = [];
-      const connectorShapes = new Set();
       const unsupportedWarnings = (parser?.detectUnsupportedElements || detectUnsupportedElements)(pageText);
-      const shapeRe = /<Shape\b([\s\S]*?)<\/Shape>/gi;
-      let shapeMatch;
 
-      while ((shapeMatch = shapeRe.exec(pageText))) {
-        const xml = shapeMatch[0];
-        const id = attr(shapeMatch[1], 'ID');
-        const type = attr(shapeMatch[1], 'Type') || 'Shape';
-        if (type === 'Group' || type === 'Foreign') continue;
-
-        const numId = Number(id);
-        const masterId = attr(shapeMatch[1], 'Master');
-        const isConnector = masterId === '2' ||
-          /Dynamic Connector/i.test(xml) ||
-          (/<Cell\b[^>]*N="BeginX"[^>]*F="/i.test(xml) && /<Cell\b[^>]*N="EndX"[^>]*F="/i.test(xml)) ||
-          /<Connect\b[^>]*FromSheet="${numId}"/i.test(pageText);
-
-        if (isConnector) {
-          connectorShapes.add(String(numId));
-          continue;
-        }
-
-        const width = cell(xml, 'Width', 1) * 96;
-        const height = cell(xml, 'Height', 0.67) * 96;
-        nodes.push({
-          id: `visio_${id}`,
-          label: textOf(xml),
-          x: Math.max(0, (cell(xml, 'PinX', 1) - width / 192) * 96),
-          y: Math.max(0, (11 - cell(xml, 'PinY', 1) - height / 192) * 96),
-          w: width,
-          h: height,
-          shape: /LaneType/.test(xml) ? 'swimlane' : 'rectangle',
-          textColor: 'auto'
-        });
-      }
+      const { nodes, connectorShapes } = parsePageNodes(pageText);
 
       const pageConnects = allConnects[pageIndex] || [];
-      const edgeMap = new Map();
-      for (const connect of pageConnects) {
-        if (!connectorShapes.has(connect.fromSheet)) continue;
-        const key = connect.fromSheet;
-        if (!edgeMap.has(key)) edgeMap.set(key, { connectorId: key, endpoints: [] });
-        edgeMap.get(key).endpoints.push({ toSheet: connect.toSheet, fromCell: connect.fromCell });
-      }
-
-      for (const [connectorId, edge] of edgeMap) {
-        const sorted = edge.endpoints.sort((a, b) => a.fromCell.localeCompare(b.fromCell));
-        if (sorted.length >= 2) {
-          const beginTarget = sorted.find((ep) => /Begin/i.test(ep.fromCell)) || sorted[0];
-          const endTarget = sorted.find((ep) => /End/i.test(ep.fromCell)) || sorted[1];
-          const connectorXml = entries[`visio/pages/page${pageIndex}.xml`] || '';
-          const connectorShapeRe = new RegExp(`<Shape\\b[^>]*ID="${connectorId}"[^>]*>[\\s\\S]*?<\\/Shape>`, 'i');
-          const connectorShapeMatch = connectorShapeRe.exec(connectorXml);
-          const edgeLabel = connectorShapeMatch ? textOf(connectorShapeMatch[0]) : '';
-          connections.push({ id: `visio_edge_${connectorId}`, from: `visio_${beginTarget.toSheet}`, to: `visio_${endTarget.toSheet}`, label: edgeLabel });
-        }
-      }
+      let connections = buildConnectionsFromConnects(pageConnects, connectorShapes, pageText, entries, pageIndex);
 
       if (connections.length === 0) {
-        shapeRe.lastIndex = 0;
-        while ((shapeMatch = shapeRe.exec(pageText))) {
-          const xml = shapeMatch[0];
-          const id = Number(attr(shapeMatch[1], 'ID'));
-          const master = attr(shapeMatch[1], 'Master');
-          if (master !== '2' && !/Dynamic Connector/i.test(xml)) continue;
-          const begin = /BeginX[^>]*F="Sheet\.(\d+)!/i.exec(xml);
-          const end = /EndX[^>]*F="Sheet\.(\d+)!/i.exec(xml);
-          if (begin && end) connections.push({ id: `visio_edge_${id}`, from: `visio_${begin[1]}`, to: `visio_${end[1]}`, label: textOf(xml) });
-        }
+        connections = detectFormulaConnections(pageText);
       }
 
       pages.push({
@@ -185,5 +205,5 @@
     return result;
   }
 
-  global.DiagramWeaveVsdxParser = { parseEntries, parseConnectElements, detectUnsupportedElements, textOf, cell, num, attr, esc };
+  global.DiagramWeaveVsdxParser = { parseEntries, parseConnectElements, detectUnsupportedElements, parsePageNodes, buildConnectionsFromConnects, detectFormulaConnections, textOf, cell, num, attr, esc };
 })(typeof window !== 'undefined' ? window : globalThis);

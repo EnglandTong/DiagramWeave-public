@@ -50,7 +50,6 @@ const ROOT_FILE_ALLOWLIST = new Set([
 ]);
 
 const ROOT_DIR_ALLOWLIST = new Set([
-  'locales',
   'remote',
   'templates',
   'vendor',

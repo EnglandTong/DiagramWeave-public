@@ -106,6 +106,12 @@
     if (Array.isArray(raw.tags)) node.tags = raw.tags.slice(0, 20).map(tag => sanitizeTextField(tag, 80)).filter(Boolean);
     else if (typeof raw.tags === 'string') node.tags = raw.tags.split(',').slice(0, 20).map(tag => sanitizeTextField(tag.trim(), 80)).filter(Boolean);
 
+    // Phase 2：组合 / 容器 / 泳道集引用（完整性在 sanitizePage 内二次校验）
+    if (raw.groupId) node.groupId = sanitizeTextField(raw.groupId, 80);
+    if (raw.containerId) node.containerId = sanitizeTextField(raw.containerId, 80);
+    if (raw.isContainer === true) node.isContainer = true;
+    if (raw.swimlaneSetId) node.swimlaneSetId = sanitizeTextField(raw.swimlaneSetId, 80);
+
     return node;
   }
 
@@ -148,6 +154,21 @@
     };
   }
 
+  function sanitizeGroupEntry(raw, index) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = sanitizeTextField(raw.id, 80) || ('group_import_' + index);
+    return { id, name: sanitizeTextField(raw.name, 200) };
+  }
+
+  function sanitizeSwimlaneSetEntry(raw, index) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = sanitizeTextField(raw.id, 80) || ('laneSet_import_' + index);
+    const lanes = Array.isArray(raw.lanes)
+      ? raw.lanes.slice(0, 50).map(lane => sanitizeTextField(lane, 200))
+      : [];
+    return { id, name: sanitizeTextField(raw.name, 200), lanes };
+  }
+
   function sanitizePage(raw, pageIndex) {
     if (!raw || typeof raw !== 'object') return null;
 
@@ -169,6 +190,44 @@
       ? rawLayers.slice(0, 50).map((l, i) => sanitizeLayer(l, i))
       : [{ id: 0, name: '图层 1', visible: true, locked: false }];
 
+    // Phase 2：组合 / 泳道集注册表（按 id 去重）
+    const groups = [];
+    const groupIdSet = new Set();
+    (Array.isArray(raw.groups) ? raw.groups.slice(0, 500) : []).forEach((g, i) => {
+      const entry = sanitizeGroupEntry(g, i);
+      if (entry && !groupIdSet.has(entry.id)) { groupIdSet.add(entry.id); groups.push(entry); }
+    });
+    const swimlaneSets = [];
+    const laneSetIdSet = new Set();
+    (Array.isArray(raw.swimlaneSets) ? raw.swimlaneSets.slice(0, 100) : []).forEach((s, i) => {
+      const entry = sanitizeSwimlaneSetEntry(s, i);
+      if (entry && !laneSetIdSet.has(entry.id)) { laneSetIdSet.add(entry.id); swimlaneSets.push(entry); }
+    });
+
+    // Phase 2 引用完整性：清除悬空引用 / 自引用 / 容器环
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
+    nodes.forEach(n => {
+      if (n.groupId && !groupIdSet.has(n.groupId)) delete n.groupId;
+      if (n.swimlaneSetId && !laneSetIdSet.has(n.swimlaneSetId)) delete n.swimlaneSetId;
+      if (n.containerId) {
+        const target = nodeById.get(n.containerId);
+        if (!target || target === n || target.isContainer !== true) delete n.containerId;
+      }
+    });
+    nodes.forEach(n => {
+      if (!n.containerId) return;
+      const visited = new Set([n.id]);
+      let cur = nodeById.get(n.containerId);
+      let depth = 0;
+      while (cur && cur.containerId && depth < 64) {
+        if (visited.has(cur.id)) { delete n.containerId; return; }
+        visited.add(cur.id);
+        cur = nodeById.get(cur.containerId);
+        depth += 1;
+      }
+      if (depth >= 64) delete n.containerId;
+    });
+
     const page = {
       id: sanitizeTextField(raw.id, 80) || ('page_' + (pageIndex + 1)),
       name: sanitizeTextField(raw.name) || ('页面 ' + (pageIndex + 1)),
@@ -176,6 +235,8 @@
       connections,
       layers,
       nextLayerId: sanitizeNum(raw.nextLayerId, 1, 9999, layers.length),
+      groups,
+      swimlaneSets,
     };
     if (raw.slaDays != null && Number(raw.slaDays) > 0) page.slaDays = sanitizeNum(raw.slaDays, 0.01, 999999, 1);
     return page;
@@ -238,6 +299,8 @@
         connections: data.connections,
         id: 'page_1',
         name: '页面 1',
+        groups: data.groups,
+        swimlaneSets: data.swimlaneSets,
       }, 0);
       if (!page) return null;
 
@@ -248,6 +311,8 @@
         autosaveSeconds: sanitizeNum(data.autosaveSeconds, 5, 3600, 30),
         nodes: page.nodes,
         connections: page.connections,
+        groups: page.groups,
+        swimlaneSets: page.swimlaneSets,
         nextId: sanitizeNum(data.nextId, 1, 999999, page.nodes.length + 1),
         connRouteMode,
         routingRules,

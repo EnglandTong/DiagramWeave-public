@@ -26,15 +26,17 @@
   function align(nodes, mode) {
     const box = bounds(nodes);
     if (!box || nodes.length < 2) return [];
+    // 别名：hcenter → center, vcenter → middle
+    const m = mode === 'hcenter' ? 'center' : mode === 'vcenter' ? 'middle' : mode;
     return nodes.map(node => {
       let x = node.x;
       let y = node.y;
-      if (mode === 'left') x = box.minX;
-      if (mode === 'center') x = box.minX + box.width / 2 - node.w / 2;
-      if (mode === 'right') x = box.maxX - node.w;
-      if (mode === 'top') y = box.minY;
-      if (mode === 'middle') y = box.minY + box.height / 2 - node.h / 2;
-      if (mode === 'bottom') y = box.maxY - node.h;
+      if (m === 'left') x = box.minX;
+      if (m === 'center') x = box.minX + box.width / 2 - node.w / 2;
+      if (m === 'right') x = box.maxX - node.w;
+      if (m === 'top') y = box.minY;
+      if (m === 'middle') y = box.minY + box.height / 2 - node.h / 2;
+      if (m === 'bottom') y = box.maxY - node.h;
       return { id: node.id, x, y };
     });
   }

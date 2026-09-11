@@ -21,14 +21,15 @@ describe('sanitizeSvg XSS prevention', () => {
     const result = sanitizeSvg(input);
     expect(result).not.toContain('<script>');
     expect(result).not.toContain('alert');
-    expect(result).toContain('<rect');
+    // P1-01: fallback 模式（无 DiagramWeaveSvgSanitizer）采用宁严勿漏策略，
+    // 含可疑标记的 SVG 整体拒绝；生产环境委托白名单 DOM 清洗器可保留安全部分。
   });
 
   it('strips event handler attributes (onclick)', () => {
     const input = '<svg><rect onclick="alert(1)" width="10" height="10"/></svg>';
     const result = sanitizeSvg(input);
     expect(result).not.toContain('onclick');
-    expect(result).toContain('<rect');
+    // P1-01: fallback 整体拒绝含 on* 属性的 SVG
   });
 
   it('strips event handler attributes (onload with single quotes)', () => {
@@ -47,7 +48,8 @@ describe('sanitizeSvg XSS prevention', () => {
     const input = '<svg><a xlink:href="javascript:alert(1)"><text>click</text></a></svg>';
     const result = sanitizeSvg(input);
     expect(result).not.toContain('javascript:');
-    expect(result).toContain('blocked:');
+    // P1-01: fallback 整体拒绝含 javascript: 的 SVG
+    expect(result).toBe('');
   });
 
   it('returns empty string for non-string input', () => {

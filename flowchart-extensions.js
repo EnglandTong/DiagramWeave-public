@@ -10,7 +10,8 @@
   }
 
   function escapeHtml(str) {
-    // 委托至 editor/text-utils.js（Loop 2.4 Slice 1 抽取）；不可用时退回本地最小实现（不转义单引号，足够 title= 场景）。
+    // 委托至 editor/text-utils.js（Loop 2.4 Slice 1 抽取）。
+    // P2-01 修复：fallback 统一为 5 字符转义（& < > " '），与 text-utils.js 语义一致。
     if (typeof global.DiagramWeaveEditorText !== 'undefined' && typeof global.DiagramWeaveEditorText.escapeHtml === 'function') {
       return global.DiagramWeaveEditorText.escapeHtml(str);
     }
@@ -18,7 +19,8 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   const EXT_SHAPE_DEFAULTS = {
@@ -82,6 +84,8 @@
         { id: 0, name: dwT('layer.default', { n: 1 }), visible: true, locked: false },
       ],
       nextLayerId: 1,
+      groups: [],
+      swimlaneSets: [],
     };
   }
 
@@ -94,6 +98,8 @@
     if (!page || typeof state === 'undefined') return;
     page.nodes = state.nodes;
     page.connections = state.connections;
+    page.groups = state.groups;
+    page.swimlaneSets = state.swimlaneSets;
   }
 
   function syncStateFromPage() {
@@ -101,6 +107,8 @@
     if (!page || typeof state === 'undefined') return;
     state.nodes = page.nodes;
     state.connections = page.connections;
+    state.groups = Array.isArray(page.groups) ? page.groups : [];
+    state.swimlaneSets = Array.isArray(page.swimlaneSets) ? page.swimlaneSets : [];
     state.selectedNodeId = null;
     state.selectedConnectionId = null;
   }
@@ -154,6 +162,8 @@
     copy.nodes = JSON.parse(JSON.stringify(cur.nodes));
     copy.connections = JSON.parse(JSON.stringify(cur.connections));
     copy.layers = JSON.parse(JSON.stringify(cur.layers));
+    copy.groups = JSON.parse(JSON.stringify(cur.groups || []));
+    copy.swimlaneSets = JSON.parse(JSON.stringify(cur.swimlaneSets || []));
     doc.pages.push(copy);
     switchPage(copy.id);
   }
@@ -216,19 +226,25 @@
     if (typeof showToast === 'function') showToast(`已删除页面「${target.name}」`);
   }
 
+  // P2-05 修复：页面 ID 用于 onclick 内联 JS 字符串时，剥离可突破引号上下文的字符。
+  function safeIdForJs(id) {
+    return String(id).replace(/['"\\<>]/g, '');
+  }
+
   function renderPageTabs() {
     const bar = document.getElementById('pageTabs');
     if (!bar) return;
     const canDelete = doc.pages.length > 1;
     bar.innerHTML = doc.pages.map(p => {
+      const sid = safeIdForJs(p.id);
       const closeBtn = canDelete
-        ? `<button type="button" class="page-tab-close" onclick="event.stopPropagation();DiagramWeave.deletePage('${p.id}')" title="${escapeHtml(dwT('page.delete'))}" aria-label="${escapeHtml(dwT('page.delete'))}">×</button>`
+        ? `<button type="button" class="page-tab-close" onclick="event.stopPropagation();DiagramWeave.deletePage('${sid}')" title="${escapeHtml(dwT('page.delete'))}" aria-label="${escapeHtml(dwT('page.delete'))}">×</button>`
         : '';
       return `
       <span class="page-tab-wrap${p.id === doc.currentPageId ? ' active' : ''}">
         <button type="button" class="page-tab"
-          onclick="DiagramWeave.switchPage('${p.id}')"
-          ondblclick="DiagramWeave.renamePage('${p.id}')"
+          onclick="DiagramWeave.switchPage('${sid}')"
+          ondblclick="DiagramWeave.renamePage('${sid}')"
           title="${escapeHtml(dwT('page.renameHint'))}">${escapeHtml(p.name)}</button>
         ${closeBtn}
       </span>`;
