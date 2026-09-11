@@ -1,1 +1,12 @@
-playwright-results/
+﻿playwright-results/
+node_modules/
+dist/
+package-lock.json
+*.log
+.trae/
+.DS_Store
+Thumbs.db
+.env*
+__pycache__/
+*.pyc
+vite.config.*.timestamp-*
